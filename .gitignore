@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+*.egg-info/
+
+# Environnement / secrets
+.env
+
+# LaTeX (artefacts de compilation — on garde seulement .tex et .pdf finaux)
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# Données locales (pas versionnées : trop volumineuses / regénérables)
+data/raw/
+data/processed/
+*.sqlite3
+*.db
+
+# OS
+.DS_Store
+Thumbs.db

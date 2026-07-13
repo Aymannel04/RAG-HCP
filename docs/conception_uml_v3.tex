@@ -1,0 +1,118 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{babel}
+\renewcommand{\contentsname}{Table des mati\`eres}
+\usepackage{lmodern}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\definecolor{navy}{HTML}{111111}
+\definecolor{gold}{HTML}{1565C0}
+\definecolor{greytext}{HTML}{555555}
+
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.6em}{}[{\color{navy}\titlerule}]
+\titleformat{\subsection}{\large\bfseries\color{gold}}{\thesubsection}{0.6em}{}
+
+\hypersetup{colorlinks=true, linkcolor=navy, urlcolor=navy}
+
+\newcommand{\diagfig}[2]{%
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.92\textwidth]{#1}
+\par\vspace{4pt}
+{\small\color{greytext}\itshape #2}
+\end{figure}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries\color{navy} Dossier de conception\par}
+\vspace{0.5cm}
+{\Large\bfseries\color{gold} Analyse conceptuelle UML et Merise -- Syst\`eme RAG pour hcp.ma\par}
+\vspace{1.5cm}
+{\large\color{greytext} Structure d'accueil~: Haut-Commissariat au Plan (HCP), Direction des Syst\`emes d'Information Statistiques\par}
+\vspace{0.3cm}
+{\large\color{greytext} Bin\^ome~: Ayman El Baida et Saad Mesbah\par}
+\vspace{0.3cm}
+{\large\color{greytext} P\'eriode du stage~: 1er juillet -- fin ao\^ut 2026\par}
+\vspace{0.3cm}
+{\large\itshape\color{greytext} Document compl\'ementaire \`a la fiche de cadrage -- phase conception\par}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Ce document prolonge la fiche de cadrage en formalisant, selon la d\'emarche UML et Merise, l'analyse conceptuelle du syst\`eme de questions-r\'eponses (RAG) pour hcp.ma. Sept diagrammes y sont pr\'esent\'es~: le diagramme de cas d'utilisation, le mod\`ele conceptuel de donn\'ees (MCD) et sa traduction logique (MLD), le diagramme de classes, deux diagrammes de s\'equence illustrant les deux chemins de traitement du syst\`eme, et un diagramme d'activit\'e d\'ecrivant le pipeline d'ingestion. Chaque diagramme est accompagn\'e d'une analyse qui explique son contenu et le relie aux choix architecturaux d\'ej\`a justifi\'es dans la fiche de cadrage.
+
+\section{Diagramme de cas d'utilisation}
+Ce diagramme fixe le p\'erim\`etre fonctionnel du syst\`eme en identifiant les acteurs et leurs interactions, avant toute consid\'eration technique.
+
+\diagfig{images/uml_use_case.png}{Figure 1 -- Diagramme de cas d'utilisation du syst\`eme RAG hcp.ma}
+
+\subsection*{Analyse}
+Deux acteurs sont identifi\'es. L'\textbf{Utilisateur}, repr\'esentant le grand public visiteur de hcp.ma, interagit avec le syst\`eme pour poser une question en langage naturel, consulter une r\'eponse sourc\'ee, et donner un retour sur cette r\'eponse. L'\textbf{Administrateur}, rattach\'e au service SI, dispose de cas d'utilisation distincts~: mettre \`a jour le contenu index\'e, consulter l'historique des questions pos\'ees, et superviser la fiabilit\'e du syst\`eme. Cette s\'eparation des r\^oles montre que le syst\`eme doit exposer deux niveaux d'interaction~: une interface publique simple et une interface de gestion plus technique. Ce diagramme d\'ecoule directement des besoins fonctionnels F1 \`a F6 d\'efinis dans la fiche de cadrage et en constitue la traduction visuelle formelle.
+
+\section{Mod\`ele conceptuel de donn\'ees (MCD)}
+Le MCD formalise la partie strictement relationnelle du syst\`eme, selon la m\'ethode Merise.
+
+\diagfig{images/uml_mcd.png}{Figure 2 -- MCD des entit\'es DOCUMENT, CHUNK et INDICATEUR}
+
+\subsection*{Analyse}
+Trois entit\'es structurent ce mod\`ele~: DOCUMENT, CHUNK et INDICATEUR. Deux associations les relient. L'association «~contient~» entre DOCUMENT et CHUNK porte la cardinalit\'e (0,N) c\^ot\'e document et (1,1) c\^ot\'e chunk~: un document peut contenir de 0 \`a N fragments de texte, mais un fragment appartient toujours \`a exactement un document. L'association «~est source de~» entre DOCUMENT et INDICATEUR suit la m\^eme logique~: un document peut \^etre \`a l'origine de plusieurs indicateurs chiffr\'es, mais chaque indicateur provient d'un document unique, tra\c{c}able.
+
+Un point m\'ethodologique important appara\^it ici~: l'index vectoriel des embeddings, bien que central dans l'architecture g\'en\'erale du syst\`eme, n'appara\^it volontairement pas dans ce MCD. Un vecteur de similarit\'e s\'emantique ne se pr\^ete pas \`a une mod\'elisation entit\'e-association classique~; il s'agit d'une structure technique de nature diff\'erente, d\'ej\`a d\'ecrite dans le mod\`ele de donn\'ees de la fiche de cadrage. Cette limite assum\'ee du MCD refl\`ete une application rigoureuse de la m\'ethode Merise plut\^ot qu'un oubli~: on ne force pas dans un formalisme relationnel une structure qui ne l'est pas.
+
+\section{Mod\`ele logique de donn\'ees (MLD)}
+Le MLD traduit le MCD en sch\'ema de tables directement impl\'ementable.
+
+\diagfig{images/uml_mld.png}{Figure 3 -- MLD : tables DOCUMENT, CHUNK et INDICATEUR avec cl\'es primaires et \'etrang\`eres}
+
+\subsection*{Analyse}
+Chaque entit\'e du MCD devient une table SQL dot\'ee d'une cl\'e primaire (PK). Les associations se traduisent par des cl\'es \'etrang\`eres~: la colonne \texttt{id\_document} appara\^it \`a la fois dans CHUNK et dans INDICATEUR, r\'ef\'eren\c{c}ant la table DOCUMENT. Cette contrainte d'int\'egrit\'e r\'ef\'erentielle garantit que chaque fragment de texte et chaque indicateur reste tra\c{c}able jusqu'\`a son document source~: c'est la condition technique n\'ecessaire \`a la citation syst\'ematique des sources exig\'ee par le besoin fonctionnel F3 et l'exigence non fonctionnelle NF3 de la fiche de cadrage. Ce MLD peut \^etre impl\'ement\'e directement en SQLite ou PostgreSQL sans transformation suppl\'ementaire.
+
+\section{Diagramme de classes}
+Ce diagramme transpose les neuf modules du syst\`eme, d\'ej\`a d\'ecrits sous forme de tableau dans la fiche de cadrage, en classes logicielles.
+
+\diagfig{images/uml_classes.png}{Figure 4 -- Diagramme de classes des composants logiciels}
+
+\subsection*{Analyse}
+Chaque classe porte une responsabilit\'e unique~: \texttt{Scraper} collecte, \texttt{Extracteur} nettoie et s\'epare, \texttt{IndexeurTexte} et \texttt{ConstructeurIndicateurs} indexent chacun selon la nature du contenu, \texttt{Routeur} aiguille, \texttt{RetrievalReranker} et \texttt{LookupStructure} r\'ecup\`erent l'information selon le chemin choisi, \texttt{Generateur} r\'edige, et \texttt{Interface} affiche. Les fl\`eches repr\'esentent les d\'ependances d'utilisation et mat\'erialisent le flux de donn\'ees de bout en bout, avec la bifurcation caract\'eristique de l'architecture entre traitement du texte et traitement des donn\'ees chiffr\'ees, visible \`a deux reprises dans le diagramme (apr\`es \texttt{Extracteur} et apr\`es \texttt{Routeur}). Cette d\'ecomposition modulaire permet au bin\^ome de r\'epartir le d\'eveloppement par classe sans d\'ependance circulaire entre les deux membres.
+
+\section{Diagramme de s\'equence -- question chiffr\'ee}
+Ce diagramme illustre, message par message, le chemin de traitement d'une question portant sur une valeur pr\'ecise.
+
+\diagfig{images/uml_seq_chiffre.png}{Figure 5 -- Sc\'enario «~Quel est le taux de ch\^omage actuel~?~»}
+
+\subsection*{Analyse}
+La caract\'eristique essentielle de ce sc\'enario est l'absence de g\'en\'eration libre~: apr\`es que le \texttt{Routeur} a class\'e la question comme portant sur un chiffre, le \texttt{LookupStructure} ex\'ecute une requ\^ete directe sur la table INDICATEUR et renvoie une valeur exacte accompagn\'ee de sa source. Le \texttt{Generateur} n'intervient qu'en toute fin de cha\^ine pour mettre cette valeur en forme dans une phrase, sans marge d'interpr\'etation sur le chiffre lui-m\^eme. C'est ce chemin, distinct du second sc\'enario, qui \'elimine le risque d'hallucination sur les chiffres officiels et r\'epond \`a l'exigence non fonctionnelle NF2 (exactitude factuelle sup\'erieure ou \'egale \`a 90~\%).
+
+\section{Diagramme de s\'equence -- question conceptuelle}
+Ce second diagramme illustre le chemin emprunt\'e pour les questions explicatives ou m\'ethodologiques.
+
+\diagfig{images/uml_seq_conceptuel.png}{Figure 6 -- Sc\'enario «~C'est quoi le RGPH~?~»}
+
+\subsection*{Analyse}
+Contrairement au premier sc\'enario, la r\'eponse n'est pas une valeur unique r\'ecup\'er\'ee par requ\^ete exacte, mais une synth\`ese construite \`a partir de plusieurs passages textuels. Le \texttt{RetrievalReranker} interroge l'\texttt{IndexTexte} par recherche hybride (s\'emantique et lexicale), puis retrie les passages candidats pour ne garder que les plus pertinents avant de les transmettre au \texttt{Generateur}. La comparaison directe des figures 5 et 6 met en \'evidence la diff\'erence de traitement entre les deux types de questions~: c'est cette bifurcation, d\'ecid\'ee par le \texttt{Routeur} d\`es la r\'eception de la question, qui constitue le c\oe ur de l'architecture propos\'ee dans la fiche de cadrage.
+
+\section{Diagramme d'activit\'e -- pipeline d'ingestion}
+Ce diagramme mod\'elise le processus d'ingestion du contenu, en amont de toute interaction avec un utilisateur.
+
+\diagfig{images/uml_activite.png}{Figure 7 -- Pipeline d'ingestion, de la collecte \`a l'indexation}
+
+\subsection*{Analyse}
+\`A la diff\'erence des deux diagrammes de s\'equence pr\'ec\'edents, ce diagramme repr\'esente un traitement par lot (batch) et non une interaction en temps r\'eel avec un utilisateur~: c'est pourquoi il est mod\'elis\'e en diagramme d'activit\'e plut\^ot qu'en diagramme de s\'equence, les deux formalismes n'ayant pas la m\^eme vocation. Le point de d\'ecision «~Type de contenu~?~» mat\'erialise la bifurcation entre les deux natures de contenu identifi\'ees d\`es la probl\'ematique du projet~: le texte narratif suit un chemin de d\'ecoupage, d'embedding puis d'indexation hybride, tandis que les tableaux de chiffres suivent un chemin d'extraction directe vers la table indicateurs. La barre de synchronisation en fin de diagramme indique que les deux branches doivent \^etre compl\`etes avant que le contenu ne soit consid\'er\'e comme int\'egralement disponible pour r\'epondre aux questions.
+
+\section{Synth\`ese}
+Les sept diagrammes pr\'esent\'es dans ce dossier couvrent l'ensemble des angles n\'ecessaires \`a une analyse conceptuelle rigoureuse~: le p\'erim\`etre fonctionnel (cas d'utilisation), la structure des donn\'ees relationnelles (MCD, MLD), l'architecture logicielle (classes), le comportement dynamique du syst\`eme face \`a l'utilisateur (s\'equences) et le processus de pr\'eparation des donn\'ees (activit\'e). Cette analyse valide, sous une forme formelle et normalis\'ee, les choix d\'ej\`a justifi\'es dans la fiche de cadrage -- en particulier la s\'eparation stricte entre traitement du texte et traitement des donn\'ees chiffr\'ees, qui demeure le fil conducteur de l'ensemble des diagrammes. Le bin\^ome dispose \`a pr\'esent d'une base suffisamment formalis\'ee pour engager la phase de r\'ealisation.
+
+\end{document}
