@@ -10,9 +10,11 @@ sont dans des PDF/XLSX telecharges depuis ces pages. Le Scraper doit donc detect
 telecharger ces pieces jointes, pas seulement lire le HTML de la page elle-meme.
 
 Statut : la collecte de page HTML + titre/date est fonctionnelle et testee en reel
-(27/27). La detection/telechargement de pieces jointes est ecrite mais PAS ENCORE
-testee en conditions reelles (pas d'acces reseau vers hcp.ma dans ce sandbox) — a
-valider en priorite avant de s'appuyer dessus pour le Sprint 2.
+(27/27). La detection/telechargement de pieces jointes a ete testee en reel une premiere
+fois le 15 juillet : le telechargement marche (8000+ caracteres et de vrais tableaux de
+donnees extraits d'un PDF reel), mais le premier test a remonte un vrai PDF en arabe
+alors que le champ langue etait code en dur "fr" — corrige ci-dessous (detection de la
+langue + filtrage arabe pour l'instant, voir TODO.md/support arabe en marge V1).
 """
 from __future__ import annotations
 
@@ -42,14 +44,28 @@ EXTENSIONS_XLSX = (".xlsx", ".xls")
 EXTENSIONS_PDF = (".pdf",)
 INDICES_HREF_TELECHARGEMENT = ("/attachment/", "/file/")
 
+# Indices de langue observes dans les noms de fichiers hcp.ma (ex. "Note Conj_Fr.pdf"
+# vs "Note Conj_Ar.pdf"). Le projet cible le francais en priorite (fiche de cadrage,
+# section 11) ; l'arabe est une extension volontairement hors scope V1 (TODO.md, marge).
+INDICES_ARABE = ("_ar.", "_ar)", "(ar)", " ar)", "version ar", "arabe")
+INDICES_FRANCAIS = ("_fr.", "_fr)", "(fr)", " fr)", "version fr", "francais", "français")
+
 
 class Scraper:
     """Collecte les pages et pieces jointes (PDF/XLSX) des categories ciblees de hcp.ma."""
 
-    def __init__(self, delay: float = 1.0, telecharger_pieces_jointes: bool = True):
+    def __init__(
+        self,
+        delay: float = 1.0,
+        telecharger_pieces_jointes: bool = True,
+        inclure_arabe: bool = False,
+    ):
         # Pause entre deux requetes : reste raisonnable vis-a-vis du serveur (voir robots.txt).
         self.delay = delay
         self.telecharger_pieces_jointes = telecharger_pieces_jointes
+        # Hors scope V1 par defaut (voir fiche de cadrage section 11 + TODO.md marge) :
+        # on ne telecharge pas les variantes arabes tant que ce n'est pas explicitement demande.
+        self.inclure_arabe = inclure_arabe
 
     def collecter(self, urls: list[str], categorie: str = "") -> list[Document]:
         """Recupere chaque URL de la liste et retourne les Document correspondants
@@ -88,11 +104,14 @@ class Scraper:
         resultats = [page]
 
         if self.telecharger_pieces_jointes:
-            for href, type_fichier in self._detecter_pieces_jointes(soup):
+            for href, type_fichier, langue in self._detecter_pieces_jointes(soup):
+                if langue == "ar" and not self.inclure_arabe:
+                    print(f"[Scraper] piece jointe arabe ignoree (hors scope V1) : {href}")
+                    continue
                 url_piece = urljoin(url, href)
                 try:
                     doc_piece = self._telecharger_piece_jointe(
-                        url_piece, type_fichier, titre, date_publication, categorie
+                        url_piece, type_fichier, langue, titre, date_publication, categorie
                     )
                     if doc_piece:
                         resultats.append(doc_piece)
@@ -123,36 +142,47 @@ class Scraper:
         return m.group(1).strip() if m else None
 
     @staticmethod
-    def _detecter_pieces_jointes(soup: BeautifulSoup) -> list[tuple[str, str]]:
-        """Repere les liens de telechargement PDF/XLSX sur une page article.
+    def _detecter_langue(signal: str) -> str:
+        if any(indice in signal for indice in INDICES_ARABE):
+            return "ar"
+        if any(indice in signal for indice in INDICES_FRANCAIS):
+            return "fr"
+        return "fr"  # a defaut d'indice explicite, on suppose francais (langue par defaut du site)
 
-        Heuristique (a affiner une fois testee en reel, voir docstring du module) :
-        on regarde le href, le texte du lien, l'attribut title, et le src des images
-        contenues dans le lien (icones "pdf.jpg", "icon_pdf.gif" observees sur le site).
+    @classmethod
+    def _detecter_pieces_jointes(cls, soup: BeautifulSoup) -> list[tuple[str, str, str]]:
+        """Repere les liens de telechargement PDF/XLSX sur une page article, avec leur langue.
+
+        Heuristique (affinee le 15 juillet apres un premier test reel qui a remonte un PDF
+        arabe non identifie comme tel) : on regarde le href, le texte du lien, l'attribut
+        title, et le src des images contenues dans le lien (icones "pdf.jpg", "icon_pdf.gif"
+        observees sur le site), pour determiner a la fois le type de fichier et sa langue.
         """
-        pieces: list[tuple[str, str]] = []
+        pieces: list[tuple[str, str, str]] = []
         for a in soup.find_all("a", href=True):
             href = a["href"]
             texte = a.get_text(" ", strip=True).lower()
             titre_attr = (a.get("title") or "").lower()
             img_srcs = " ".join(img.get("src", "") for img in a.find_all("img")).lower()
             signal = " ".join([href.lower(), texte, titre_attr, img_srcs])
+            langue = cls._detecter_langue(signal)
 
             if any(ext in signal for ext in EXTENSIONS_XLSX):
-                pieces.append((href, "xlsx"))
+                pieces.append((href, "xlsx", langue))
             elif any(ext in signal for ext in EXTENSIONS_PDF):
-                pieces.append((href, "pdf"))
+                pieces.append((href, "pdf", langue))
             elif any(indice in href for indice in INDICES_HREF_TELECHARGEMENT):
                 # Lien de telechargement sans extension visible (ex. /attachment/2866603/) :
                 # on suppose PDF par defaut, le Content-Type reel corrigera si besoin
                 # (voir _telecharger_piece_jointe).
-                pieces.append((href, "pdf"))
+                pieces.append((href, "pdf", langue))
         return pieces
 
     def _telecharger_piece_jointe(
         self,
         url_piece: str,
         type_suppose: str,
+        langue: str,
         titre_page: str,
         date_publication: Optional[str],
         categorie: str,
@@ -179,7 +209,7 @@ class Scraper:
             url=url_piece,
             titre=titre_page,  # a affiner : pas toujours le meme titre que la page parente
             date_publication=date_publication,
-            langue="fr",
+            langue=langue,
             categorie=categorie,
             type=type_fichier,
             texte_brut=str(chemin),  # chemin local du fichier brut, lu par Extracteur
@@ -199,4 +229,4 @@ if __name__ == "__main__":
     ]
     scraper = Scraper()
     for document in scraper.collecter(urls_test, categorie="Economie"):
-        print(document.type, "-", document.titre, "-", document.date_publication)
+        print(document.type, "-", document.langue, "-", document.titre, "-", document.date_publication)
