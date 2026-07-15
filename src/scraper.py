@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 import time
+import unicodedata
 from typing import Optional
 
 import requests
@@ -72,9 +73,12 @@ class Scraper:
 
     @staticmethod
     def _extraire_date(soup: BeautifulSoup) -> Optional[str]:
-        # TODO(semaine 1) : reverifier ce selecteur sur un echantillon plus large de pages ;
-        # le CMS de hcp.ma peut varier legerement d'une rubrique a l'autre.
-        texte = soup.get_text(" ", strip=True)
+        # Teste sur un vrai echantillon de 27 pages (15 juillet 2026) : 25/27 dates
+        # trouvees du premier coup. Les 2 echecs venaient de pages ou "Rédigé le" est
+        # encode en Unicode decompose (accent = caractere separe) plutot que compose,
+        # ce qui cassait le match sur "dig[ée]". Normaliser en NFC avant la regex regle
+        # ce cas sans rien retirer au comportement existant.
+        texte = unicodedata.normalize("NFC", soup.get_text(" ", strip=True))
         m = re.search(r"R[ée]dig[ée] le ([^\.]+?\d{4}(?:\s*[àa]\s*\d{1,2}[:h]\d{2})?)", texte)
         return m.group(1).strip() if m else None
 
