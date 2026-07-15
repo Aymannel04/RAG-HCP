@@ -1,0 +1,143 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{babel}
+\renewcommand{\contentsname}{Table des mati\`eres}
+\usepackage{lmodern}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{graphicx}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\definecolor{navy}{HTML}{111111}
+\definecolor{gold}{HTML}{1565C0}
+\definecolor{greytext}{HTML}{555555}
+\definecolor{lightgrey}{HTML}{F2F4F9}
+
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.6em}{}[{\color{navy}\titlerule}]
+\titleformat{\subsection}{\large\bfseries\color{gold}}{\thesubsection}{0.6em}{}
+
+\hypersetup{colorlinks=true, linkcolor=navy, urlcolor=navy, citecolor=navy}
+
+\newcommand{\tblhead}[1]{\textcolor{white}{\textbf{#1}}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries\color{navy} Bilan du Sprint 1\par}
+\vspace{0.5cm}
+{\Large\bfseries\color{gold} Cadrage, conception et premiers scripts -- Syst\`eme RAG pour hcp.ma\par}
+\vspace{1.5cm}
+{\large\color{greytext} Structure d'accueil~: Haut-Commissariat au Plan (HCP), Direction des Syst\`emes d'Information Statistiques\par}
+\vspace{0.3cm}
+{\large\color{greytext} Bin\^ome~: Ayman El Baida et Saad Mesbah\par}
+\vspace{0.3cm}
+{\large\color{greytext} P\'eriode couverte~: 7 -- 15 juillet 2026 (Sprint 1)\par}
+\vspace{0.3cm}
+{\large\itshape\color{greytext} Document r\'edig\'e le 15 juillet 2026 -- support de suivi pour l'encadrante et le rapport de stage\par}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Objectif du Sprint 1}
+Le Sprint 1 (7 -- 13 juillet 2026, prolong\'e au 15 juillet) visait \`a poser des bases solides avant d'attaquer le pipeline complet~: formaliser le cadrage et la conception du projet, mettre en place un squelette de code align\'e sur cette conception, et surtout obtenir un premier retour du terrain en testant les premiers scripts sur de vraies pages du site hcp.ma. Ce dernier point s'est r\'ev\'el\'e le plus riche d'enseignements~: plusieurs hypoth\`eses de conception initiales se sont av\'er\'ees incompl\`etes ou fausses \`a l'\'epreuve de donn\'ees r\'eelles, ce qui a conduit \`a des corrections document\'ees plut\^ot qu'\`a des ajustements silencieux.
+
+\section{Livrables produits}
+
+\subsection{Documents de cadrage et de conception}
+\begin{longtable}{@{}p{5.5cm}p{9.7cm}@{}}
+\rowcolor{navy}
+\tblhead{Document} & \tblhead{Contenu} \\
+\midrule
+\endhead
+Fiche de cadrage (\texttt{fiche\_cadrage\_v4.pdf}) & Nature et p\'erim\`etre, probl\'ematique, objectifs, besoins fonctionnels/non fonctionnels, architecture, risques, planning en 5 sprints, glossaire. \\
+Dossier de conception (\texttt{conception\_uml\_v3.pdf}) & 7 diagrammes UML/Merise avec analyse~: cas d'utilisation, MCD, MLD, classes, deux s\'equences (question chiffr\'ee / conceptuelle), activit\'e. \\
+ADR 0001 & D\'ecision fondatrice~: s\'eparation stricte texte narratif / indicateurs chiffr\'es, pour \'eliminer le risque d'hallucination sur les chiffres officiels. \\
+ADR 0002 & Choix de la stack technique du prototype (scraping, extraction, embeddings, index, interface). \\
+ADR 0003 & D\'ecision prise en cours de Sprint 1, suite aux tests r\'eels~: le RAG s'appuie exclusivement sur les publications PDF/XLSX de hcp.ma, jamais sur le texte des pages HTML (voir section 5). \\
+\end{longtable}
+
+\subsection{Code et infrastructure}
+Squelette de d\'ep\^ot Git op\'erationnel (module par module, align\'e sur le diagramme de classes), sch\'ema de base de donn\'ees SQL (\texttt{db/schema.sql}), 6 tests automatis\'es (tous verts), et une liste de 27 URLs r\'eelles r\'eparties sur les 3 cat\'egories cibl\'ees (\'Economie, March\'e du travail, Population~\&~d\'emographie) servant d'\'echantillon de test tout au long du sprint.
+
+\section{Tests r\'eels effectu\'es}
+Contrairement \`a une simple relecture de code, chaque \'etape du pipeline a \'et\'e ex\'ecut\'ee sur les 27 vraies pages hcp.ma, ce qui a permis de d\'ecouvrir des probl\`emes invisibles sur le papier.
+
+\begin{longtable}{@{}p{4.3cm}p{5.4cm}p{5.5cm}@{}}
+\rowcolor{navy}
+\tblhead{Test} & \tblhead{M\'ethode} & \tblhead{R\'esultat} \\
+\midrule
+\endhead
+1. Scraper seul (m\'etadonn\'ees) & R\'ecup\'eration des 27 pages HTML, extraction titre/date & 27/27 pages r\'ecup\'er\'ees, 27/27 titres, 25/27 dates au premier essai (27/27 apr\`es correctif, voir section 4) \\
+2. Extracteur HTML & Extraction du texte narratif et des tableaux des 27 pages & 0 caract\`ere de texte utile sur plusieurs pages~; tableaux d\'etect\'es = menus de navigation, pas des donn\'ees \\
+3. D\'etection et t\'el\'echargement PDF/XLSX (1\textsuperscript{er} essai) & Scraper \'etendu pour rep\'erer et t\'el\'echarger les pi\`eces jointes de chaque page & 1 PDF t\'el\'echarg\'e et extrait avec succ\`es (8~000+ caract\`eres, 3 tableaux) -- preuve que le pipeline fonctionne, mais version arabe au lieu de fran\c{c}aise \\
+4. M\^eme test, apr\`es correctif langue & Nouvelle ex\'ecution sur la m\^eme page & PDF fran\c{c}ais correctement t\'el\'echarg\'e, 8~435 caract\`eres de texte r\'eel et 3 tableaux de donn\'ees \'economiques exploitables \\
+5. Run complet sur les 27 pages & Ex\'ecution de bout en bout, avec t\'el\'echargement des pi\`eces jointes & Le premier run plante en cours de route (voir section 4)~; apr\`es correctifs, un run complet aboutit, avec du contenu PDF r\'eel extrait pour la majorit\'e des publications \\
+\end{longtable}
+
+\section{Erreurs rencontr\'ees et solutions apport\'ees}
+Six probl\`emes concrets ont \'et\'e identifi\'es gr\^ace aux tests r\'eels. Cinq ont \'et\'e r\'esolus dans le Sprint 1~; le sixi\`eme reste ouvert et devient la premi\`ere t\^ache du Sprint 2.
+
+\begin{longtable}{@{}p{4cm}p{5.2cm}p{6cm}@{}}
+\rowcolor{navy}
+\tblhead{Probl\`eme} & \tblhead{Cause} & \tblhead{Solution} \\
+\midrule
+\endhead
+2 dates de publication non d\'etect\'ees sur 27 & Texte encod\'e en Unicode d\'ecompos\'e (accent s\'epar\'e de la lettre) sur certaines pages, cassant la reconnaissance de motif & Normalisation syst\'ematique du texte en Unicode compos\'e (NFC) avant l'analyse \\
+Extraction HTML inexploitable (0 caract\`ere, menus pris pour des tableaux) & Le corps des articles hcp.ma n'est pas syst\'ematiquement structur\'e en balises \texttt{<p>}, et les menus de navigation sont parfois rendus en balises \texttt{<table>} & Recadrage du p\'erim\`etre~: le HTML n'est plus une source de donn\'ees pour le RAG, seulement un moyen de rep\'erer les liens de t\'el\'echargement et le titre/date (ADR 0003) \\
+PDF t\'el\'echarg\'e dans la mauvaise langue (arabe au lieu de fran\c{c}ais) & Le champ langue du document \'etait fix\'e en dur \`a «~fr~» sans v\'erification, alors que chaque publication existe en deux versions (\_Fr / \_Ar) & D\'etection automatique de la langue \`a partir des indices pr\'esents dans les liens, avec filtrage des pi\`eces arabes par d\'efaut (hors p\'erim\`etre V1) \\
+Script interrompu par une erreur non g\'er\'ee (\texttt{PDFSyntaxError~: No~/Root~object}) & Un lien d\'etect\'e comme menant \`a un PDF pointait en r\'ealit\'e vers un contenu invalide (page d'erreur ou redirection), et rien ne v\'erifiait le contenu r\'eel avant de le traiter comme un PDF & V\'erification des nombres magiques du fichier t\'el\'echarg\'e (signature \texttt{\%PDF-} ou \texttt{PK}) avant traitement, et gestion d'exception pour qu'un document invalide n'interrompe plus l'ensemble du run \\
+Fichiers de test qui s'\'ecrasaient entre eux & Le script de test nommait chaque fichier de sortie d'apr\`es le titre du document, or une page HTML et sa pi\`ece jointe h\'eritent du m\^eme titre & Nom de fichier rendu unique en ajoutant le type de document et un num\'ero d'ordre \\
+\rowcolor{lightgrey} Sur-d\'etection des pi\`eces jointes (5 \`a 8 PDF d\'etect\'es pour une seule page, au lieu de 1 ou 2) & L'heuristique de d\'etection des liens de t\'el\'echargement est trop large~: elle rep\`ere aussi des liens vers d'autres publications list\'ees ailleurs sur la page (encart «~derni\`eres publications~») & \textbf{Ouvert} -- \`a corriger en priorit\'e en d\'ebut de Sprint 2, avant l'indexation r\'eelle, pour \'eviter d'associer du contenu au mauvais titre/cat\'egorie \\
+\end{longtable}
+
+\section{D\'ecision de recadrage~: ADR 0003}
+Le test 2 (section 3) a fait appara\^itre que l'extraction du texte HTML n'\'etait pas seulement perfectible mais fondamentalement hors sujet~: les pages HTML de hcp.ma ne portent qu'un r\'esum\'e court, les donn\'ees r\'eelles (tableaux complets, s\'eries chiffr\'ees, rapports int\'egraux) se trouvant exclusivement dans des fichiers PDF et XLSX t\'el\'echargeables. Ce constat, confirm\'e par le p\'erim\`etre exact du projet tel que pr\'ecis\'e en cours de sprint, a conduit \`a une d\'ecision d'architecture actée dans l'ADR 0003~: le syst\`eme RAG s'indexe uniquement sur les publications PDF/XLSX, le HTML servant seulement d'outil de d\'ecouverte (liens de t\'el\'echargement) et de source de m\'etadonn\'ees (titre, date). Cette clarification \'evite de continuer \`a investir du temps dans la correction d'une extraction HTML qui n'a plus lieu d'\^etre, et recentre le Sprint 2 sur ce qui compte r\'eellement.
+
+\section{\'Etat du pipeline \`a l'issue du Sprint 1}
+\begin{longtable}{@{}p{3.5cm}p{4.5cm}p{7.2cm}@{}}
+\rowcolor{navy}
+\tblhead{Module} & \tblhead{Statut} & \tblhead{D\'etail} \\
+\midrule
+\endhead
+\texttt{Scraper} & Fonctionnel, test\'e en r\'eel & Collecte les pages HTML, d\'etecte et t\'el\'echarge les pi\`eces jointes PDF/XLSX, filtre la langue \\
+\texttt{Extracteur} & Fonctionnel pour PDF/XLSX, test\'e en r\'eel & Branches \texttt{pdfplumber} et \texttt{openpyxl} op\'erationnelles~; branche HTML conserv\'ee dans le code mais non utilis\'ee pour l'indexation \\
+\texttt{IndexeurTexte}, \texttt{ConstructeurIndicateurs}, \texttt{Routeur}, \texttt{RetrievalReranker}, \texttt{LookupStructure}, \texttt{Generateur}, \texttt{Interface} & Squelette (non impl\'ement\'e) & Signatures align\'ees sur le diagramme de classes, impl\'ementation pr\'evue en Sprint 2 et 3 \\
+\end{longtable}
+
+\section{Points \`a valider avec l'encadrante}
+\begin{itemize}
+\item Choix du LLM de g\'en\'eration~: API externe autoris\'ee ou mod\`ele h\'eberg\'e en interne~? Point bloquant pour le Sprint 3.
+\item Confirmation du p\'erim\`etre~: RAG exclusivement sur les publications PDF/XLSX en fran\c{c}ais, arabe hors p\'erim\`etre V1.
+\item H\'ebergement cible du prototype et utilisateurs vis\'es.
+\item Disponibilit\'e de donn\'ees internes compl\'ementaires, budget d'acc\`es \`a une API externe si retenue.
+\end{itemize}
+
+\section{Transition vers le Sprint 2}
+Le Sprint 1 est consid\'er\'e comme cl\^otur\'e~: les scripts de collecte tournent sur un vrai \'echantillon et produisent des documents exploitables, et les probl\`emes rencontr\'es ont \'et\'e trait\'es et document\'es plut\^ot que contourn\'es. Le Sprint 2 (14 -- 20 juillet) s'ouvre sur un p\'erim\`etre pr\'ecis\'e~: transformer les publications PDF/XLSX collect\'ees en donn\'ees index\'ees, de bout en bout.
+
+\begin{longtable}{@{}p{1cm}p{14.5cm}@{}}
+\rowcolor{navy}
+\tblhead{\#} & \tblhead{T\^ache} \\
+\midrule
+\endhead
+1 & Corriger la sur-d\'etection des pi\`eces jointes (section 4) avant toute indexation \\
+2 & Valider plus largement l'extraction PDF (\texttt{pdfplumber}) et XLSX (\texttt{openpyxl}) sur l'ensemble des 27 pages \\
+3 & Chunking et embeddings du texte extrait (\texttt{IndexeurTexte.indexer}), en excluant explicitement les documents de type HTML \\
+4 & Indexation hybride Chroma (s\'emantique) + BM25 (lexical) \\
+5 & Curation des 15 \`a 20 indicateurs cl\'es \`a partir des tableaux PDF/XLSX (\texttt{ConstructeurIndicateurs.structurer}) \\
+6 & Script d'insertion en base SQLite (\texttt{db/schema.sql}) \\
+\end{longtable}
+
+\textbf{Definition of done du Sprint 2~:} les documents PDF/XLSX collect\'es en Sprint 1 sont index\'es de bout en bout (texte et indicateurs) et interrogeables par script, sans qu'aucun contenu HTML ne soit index\'e.
+
+\end{document}
