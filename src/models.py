@@ -16,7 +16,7 @@ class Document:
     date_publication: Optional[str]
     langue: str
     categorie: str
-    type: str  # "html" ou "pdf"
+    type: str  # "html", "pdf" ou "xlsx"
     texte_brut: str = ""  # HTML/texte brut avant extraction (non persisté tel quel)
 
 

@@ -27,3 +27,21 @@ de stage en fin de période, pas besoin d'être exhaustif.
   validation des hypothèses avec l'encadrante.
 
 <!-- Continuer une entrée par jour ci-dessous -->
+
+## 15 juillet 2026 (suite) — correction de trajectoire
+
+- Test du pipeline complet (Scraper + Extracteur) sur les 27 pages : 0 caractère de
+  texte propre extrait, et les "tableaux" trouvés étaient en fait des menus de
+  navigation. La stratégie HTML actuelle (tous les `<p>`, tous les `<table>`) ne colle
+  pas au vrai gabarit de page hcp.ma.
+- Confirmé avec Ayman : les vraies données (HCP, section Publications) sont fournies en
+  PDF ou XLSX, pas en HTML — les pages HTML ne sont que des résumés/vitrines avec liens
+  de téléchargement. Décision documentée dans `docs/adr/0003-ingestion-pdf-xlsx.md`.
+- Réécrit `Scraper` : détecte maintenant les liens PDF/XLSX sur chaque page et les
+  télécharge (`data/raw/`, hors dépôt), en plus du résumé HTML.
+- Réécrit `Extracteur` : ajout des branches PDF (pdfplumber) et XLSX (openpyxl), en plus
+  du HTML existant.
+- Mis à jour `db/schema.sql` (type XLSX ajouté), `requirements.txt` (openpyxl),
+  `TODO.md` (Sprint 2 recentré sur la validation PDF/XLSX en priorité).
+- Rien de tout ça n'est encore testé en conditions réelles (pas d'accès réseau vers
+  hcp.ma depuis le sandbox) — prochaine étape concrète avant de coder la suite.

@@ -21,8 +21,9 @@ Backlog :
 - [x] Squelette du repo + schéma DB (`db/schema.sql`)
 - [x] Scraper fonctionnel (`src/scraper.py`) + extracteur HTML (`src/extracteur.py`)
 - [x] Tests de base (6 tests, mocks)
-- [ ] Liste d'URLs de départ pour les 3 catégories ciblées (Économie, Marché du travail, Population)
-- [ ] Test du scraper en conditions réelles (sur PC, accès réseau normal) sur 20-30 pages
+- [x] Liste d'URLs de départ pour les 3 catégories ciblées (`data/seed_urls.py`, 27 URLs)
+- [x] Test du scraper en conditions réelles : 27/27 pages récupérées, 27/27 titres,
+      25/27 dates du premier coup (2 corrigées ensuite, cf. journal du 15 juillet)
 - [ ] Validation des hypothèses de travail avec l'encadrante (section 11 de la fiche de cadrage)
 
 **Definition of done :** le scraper tourne sur un vrai échantillon et produit des `Document`
@@ -33,18 +34,27 @@ explicitement encore ouvertes et non-bloquantes pour la suite.
 
 ## Sprint 2 (14-20 juillet) — Pipeline d'ingestion complet
 
-**Objectif :** pouvoir transformer n'importe quelle page/PDF collectée en données indexées
-(texte + indicateurs), de bout en bout.
+**Objectif :** pouvoir transformer n'importe quel document collecté (HTML, PDF, XLSX) en
+données indexées (texte + indicateurs), de bout en bout. Voir ADR 0003 : les PDF/XLSX
+liés aux pages sont la vraie source de données, priorité sur le texte HTML.
 
 Backlog :
-- [ ] Extraction PDF (`Extracteur.extraire` pour `type == "pdf"`, via pdfplumber)
+- [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
+      sur les 27 pages seed, corriger l'heuristique si besoin
+- [ ] Valider en réel `Extracteur._extraire_pdf` (pdfplumber) et `_extraire_xlsx`
+      (openpyxl) sur les PDF/XLSX ainsi téléchargés
+- [ ] Corriger `Extracteur._extraire_html` : la stratégie "tous les `<p>`/tous les
+      `<table>`" a donné 0 caractère de texte propre sur un vrai test (menus rendus en
+      `<table>`, corps d'article pas dans des `<p>`) — besoin d'un extrait de HTML réel
+      pour cibler le bon conteneur
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`)
 - [ ] Indexation Chroma + BM25
-- [ ] Curation des 15-20 indicateurs clés (`ConstructeurIndicateurs.structurer`)
+- [ ] Curation des 15-20 indicateurs clés (`ConstructeurIndicateurs.structurer`), en
+      priorité à partir des tableaux PDF/XLSX plutôt que HTML
 - [ ] Script d'insertion en base (`db/schema.sql`)
 
-**Definition of done :** les documents collectés en Sprint 1 sont indexés de bout en bout
-(texte + indicateurs) et interrogeables par script.
+**Definition of done :** les documents collectés en Sprint 1 (HTML + PDF + XLSX) sont
+indexés de bout en bout (texte + indicateurs) et interrogeables par script.
 
 ---
 
@@ -97,4 +107,4 @@ la présentation officielle.
 ## Marge (jusqu'à fin août)
 
 Réserve en cas de retard, ou extension (support arabe, amélioration interface, légendage
-visuel des graphiques, PixelRAG en fallback PDF complexe) si le calendrier le permet.
+visuel des graphique

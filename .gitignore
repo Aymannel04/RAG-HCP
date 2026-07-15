@@ -26,3 +26,6 @@ data/processed/
 # OS
 .DS_Store
 Thumbs.db
+
+# Extraits generes localement par les scripts de test (contenu volumineux, regenerable)
+scripts/extraits/
