@@ -34,27 +34,27 @@ explicitement encore ouvertes et non-bloquantes pour la suite.
 
 ## Sprint 2 (14-20 juillet) — Pipeline d'ingestion complet
 
-**Objectif :** pouvoir transformer n'importe quel document collecté (HTML, PDF, XLSX) en
-données indexées (texte + indicateurs), de bout en bout. Voir ADR 0003 : les PDF/XLSX
-liés aux pages sont la vraie source de données, priorité sur le texte HTML.
+**Objectif :** transformer chaque PDF/XLSX collecté en données indexées (texte +
+indicateurs), de bout en bout. Périmètre confirmé le 15 juillet (voir ADR 0003) : le
+RAG s'appuie **uniquement** sur les publications PDF/XLSX de hcp.ma — le HTML ne sert
+qu'à les découvrir (liens de téléchargement) et à fournir titre/date, jamais indexé.
 
 Backlog :
 - [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
-      sur les 27 pages seed, corriger l'heuristique si besoin
+      sur les 27 pages seed, corriger l'heuristique si besoin (langue déjà corrigée le
+      15/07, un PDF arabe non filtré)
 - [ ] Valider en réel `Extracteur._extraire_pdf` (pdfplumber) et `_extraire_xlsx`
-      (openpyxl) sur les PDF/XLSX ainsi téléchargés
-- [ ] Corriger `Extracteur._extraire_html` : la stratégie "tous les `<p>`/tous les
-      `<table>`" a donné 0 caractère de texte propre sur un vrai test (menus rendus en
-      `<table>`, corps d'article pas dans des `<p>`) — besoin d'un extrait de HTML réel
-      pour cibler le bon conteneur
-- [ ] Chunking + embeddings (`IndexeurTexte.indexer`)
+      (openpyxl) sur les PDF/XLSX ainsi téléchargés — premier test concluant le 15/07
+      (8000+ caractères et tableaux réels extraits d'un PDF), à confirmer sur plus d'échantillons
+- [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
+      `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25
-- [ ] Curation des 15-20 indicateurs clés (`ConstructeurIndicateurs.structurer`), en
-      priorité à partir des tableaux PDF/XLSX plutôt que HTML
+- [ ] Curation des 15-20 indicateurs clés (`ConstructeurIndicateurs.structurer`) à
+      partir des tableaux PDF/XLSX
 - [ ] Script d'insertion en base (`db/schema.sql`)
 
-**Definition of done :** les documents collectés en Sprint 1 (HTML + PDF + XLSX) sont
-indexés de bout en bout (texte + indicateurs) et interrogeables par script.
+**Definition of done :** les PDF/XLSX collectés en Sprint 1 sont indexés de bout en bout
+(texte + indicateurs) et interrogeables par script. Aucun contenu HTML n'est indexé.
 
 ---
 

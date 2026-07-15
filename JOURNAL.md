@@ -45,3 +45,13 @@ de stage en fin de période, pas besoin d'être exhaustif.
   `TODO.md` (Sprint 2 recentré sur la validation PDF/XLSX en priorité).
 - Rien de tout ça n'est encore testé en conditions réelles (pas d'accès réseau vers
   hcp.ma depuis le sandbox) — prochaine étape concrète avant de coder la suite.
+
+## 15 juillet 2026 (recadrage) — périmètre confirmé : PDF/XLSX uniquement
+
+- Ayman a confirmé le périmètre exact : le RAG doit s'appuyer uniquement sur les
+  publications hcp.ma en PDF ou Excel. Le texte des pages HTML n'est jamais une donnée
+  du projet — juste un moyen de découvrir les liens de téléchargement et le titre/date.
+- Conséquence directe : plus la peine de corriger `Extracteur._extraire_html` (retiré du
+  backlog Sprint 2). `IndexeurTexte` devra explicitement ignorer les `Document` de type
+  `html` lors de l'indexation.
+- ADR 0003 précisé pour verrouiller cette règle et éviter d'y revenir sans raison.

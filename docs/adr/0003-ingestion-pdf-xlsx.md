@@ -1,51 +1,57 @@
-# ADR 0003 — Les pages HTML sont des vitrines, l'ingestion doit cibler les PDF/XLSX lies
+# ADR 0003 — Le RAG s'indexe uniquement sur les PDF/XLSX, le HTML sert à les découvrir
 
-**Statut :** accepté — 15 juillet 2026
+**Statut :** accepté — 15 juillet 2026 (précisé le 15 juillet 2026, suite à la
+clarification du périmètre par Ayman)
 
 ## Contexte
 
 Le test réel du Scraper sur 27 pages (Sprint 1) a montré deux choses :
 1. Les pages HTML d'articles hcp.ma ne portent qu'un résumé court (quelques phrases),
-   pas les données détaillées.
+   pas les données détaillées, et cette extraction HTML est de toute façon peu fiable
+   (0 caractère de texte propre trouvé sur plusieurs pages, gabarits inconsistants).
 2. Les vraies données — tableaux complets, séries chiffrées, rapports intégraux — sont
    dans des fichiers PDF et XLSX téléchargeables, référencés par des liens sur ces mêmes
-   pages (ex. « Note Conj_Fr.pdf », observé sur les pages de note de conjoncture).
+   pages (ex. « Note Conj_Fr.pdf »).
 
-Confirmé par Ayman le 15 juillet 2026 : dans la section Publications du site, les
-données sont systématiquement fournies en PDF ou en XLSX, jamais en HTML pur.
-
-Un pipeline qui se contente d'extraire le texte des pages HTML (comme la première
-version du Scraper/Extracteur) passe donc à côté de l'essentiel du contenu utile.
+Confirmé par Ayman : le périmètre du projet est explicitement « un chatbot RAG basé sur
+les publications du site hcp.ma, et seulement les publications en PDF ou Excel ». Le
+texte des pages HTML n'est **pas** une donnée du projet, même en complément.
 
 ## Décision
 
-Revoir le rôle du Scraper : pour chaque page HTML collectée, détecter les liens de
-téléchargement PDF/XLSX qu'elle contient et les télécharger comme documents à part
-entière (`Document.type = "pdf"` ou `"xlsx"`), en plus du résumé HTML.
+Le HTML n'est jamais indexé pour le RAG. Son seul rôle est instrumental :
+1. Servir de point d'entrée de collecte (pages de catégories/publications) pour repérer
+   les liens de téléchargement PDF/XLSX.
+2. Fournir des métadonnées légères (titre, date de publication) rattachées aux documents
+   PDF/XLSX téléchargés depuis cette page.
 
-Le contenu binaire téléchargé est sauvegardé sur disque (`data/raw/`, hors dépôt git)
-plutôt que stocké en mémoire/base — seul le chemin local est gardé dans
-`Document.texte_brut` pour ce cas.
+Le Scraper télécharge chaque PDF/XLSX détecté comme document à part entière
+(`Document.type = "pdf"` ou `"xlsx"`), stocké sur disque (`data/raw/`, hors dépôt git) ;
+seul le chemin local est gardé dans `Document.texte_brut` pour ce cas.
 
-L'Extracteur gagne deux nouvelles branches :
+L'Extracteur ne fait donc réellement travailler que deux branches pour le contenu RAG :
 - PDF via `pdfplumber` (texte page par page + tableaux détectés).
 - XLSX via `openpyxl` (chaque feuille devient un tableau ; pas de texte narratif,
   tout part vers `ConstructeurIndicateurs`).
+La branche HTML (`_extraire_html`) reste dans le code par simplicité d'implémentation
+mais **son résultat n'est plus consommé par `IndexeurTexte`** (voir Conséquences) — pas
+la peine de la perfectionner davantage.
 
 ## Justification
 
-Aligné avec ADR 0001 (séparation texte / indicateurs) : les PDF/XLSX sont justement la
-source primaire des indicateurs chiffrés qu'on veut extraire avec exactitude. Le résumé
-HTML reste utile comme texte narratif léger pour la recherche sémantique générale, mais
-ne doit plus être considéré comme la source de données principale.
+Aligné avec ADR 0001 (séparation texte / indicateurs) et avec le périmètre confirmé du
+projet : les PDF/XLSX sont la source de vérité unique, à la fois pour le texte narratif
+(chunking/embeddings) et pour les indicateurs chiffrés (lookup exact).
 
 ## Conséquences
 
+- `IndexeurTexte.indexer` (Sprint 2) doit filtrer sur `document.type in ("pdf", "xlsx")`
+  et ignorer les `Document` de type `"html"` — à faire explicitement dans le SQL/logique
+  d'insertion, pas seulement une intention.
+- La tâche « corriger `Extracteur._extraire_html` » sort du backlog Sprint 2 (voir
+  TODO.md) : ce n'est plus un blocage, juste une branche de code non prioritaire.
 - Le Scraper devient plus lourd (une requête HTTP de plus par pièce jointe détectée).
-- La détection des liens de téléchargement est une heuristique (le HTML de hcp.ma ne
-  met pas toujours l'extension dans l'URL, ex. `/attachment/2866603/`) — à valider et
-  affiner sur un vrai échantillon, pas encore fait au moment de cet ADR.
-- L'extraction HTML actuelle (`_extraire_html`, tout `<p>`/tout `<table>`) s'est révélée
-  insuffisante sur un vrai gabarit de page (menus rendus en `<table>`, corps d'article
-  pas toujours dans des `<p>`) — nécessite un extrait de HTML réel pour être corrigée
-  proprement ; reste ouvert.
+- La détection des liens de téléchargement (type ET langue) est une heuristique validée
+  une première fois en réel le 15 juillet (voir `src/scraper.py`,
+  `_detecter_pieces_jointes`) — un PDF arabe non filtré a été corrigé le même jour, mais
+  l'heuristique reste à re-valider sur un échantillon plus large.
