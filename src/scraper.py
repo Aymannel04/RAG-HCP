@@ -199,6 +199,18 @@ class Scraper:
         else:
             type_fichier = type_suppose
 
+        # Verification du contenu reel (nombres magiques), pas seulement du Content-Type :
+        # l'heuristique de detection de liens est large et attrape parfois des liens qui ne
+        # menent pas vraiment a un PDF/XLSX (page d'erreur, redirection...). Sans ce controle,
+        # un fichier invalide fait planter pdfplumber/openpyxl plus tard dans le pipeline
+        # (vu en reel le 15 juillet : "PDFSyntaxError: No /Root object! - Is this really a PDF?").
+        if not self._contenu_semble_valide(resp.content, type_fichier):
+            print(
+                f"[Scraper] contenu invalide pour {url_piece} "
+                f"(pas un vrai {type_fichier} malgre le lien) — ignore"
+            )
+            return None
+
         DOSSIER_BRUT.mkdir(parents=True, exist_ok=True)
         nom_fichier = self._nom_fichier_piece(url_piece, type_fichier)
         chemin = DOSSIER_BRUT / nom_fichier
@@ -214,6 +226,17 @@ class Scraper:
             type=type_fichier,
             texte_brut=str(chemin),  # chemin local du fichier brut, lu par Extracteur
         )
+
+    @staticmethod
+    def _contenu_semble_valide(contenu: bytes, type_fichier: str) -> bool:
+        """Verifie les nombres magiques du fichier telecharge plutot que de se fier
+        uniquement au Content-Type (parfois absent ou trompeur sur des liens indirects)."""
+        if type_fichier == "pdf":
+            return contenu[:5] == b"%PDF-"
+        if type_fichier == "xlsx":
+            # Un .xlsx est une archive ZIP (signature "PK").
+            return contenu[:2] == b"PK"
+        return True
 
     @staticmethod
     def _nom_fichier_piece(href: str, type_fichier: str) -> str:

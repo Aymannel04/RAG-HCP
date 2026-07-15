@@ -63,7 +63,11 @@ def main() -> None:
             total += 1
             compteur_par_type[doc.type] += 1
 
-            texte_propre, tableaux = extracteur.extraire(doc)
+            try:
+                texte_propre, tableaux = extracteur.extraire(doc)
+            except Exception as e:  # noqa: BLE001 - un document casse ne doit pas arreter le run
+                print(f"  [!] echec extraction sur {doc.url} ({doc.type}) : {e}")
+                continue
             longueur_par_type[doc.type] += len(texte_propre)
 
             nom = nom_fichier_sûr(doc.titre, f"doc_{total}")
