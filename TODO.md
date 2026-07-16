@@ -40,6 +40,10 @@ RAG s'appuie **uniquement** sur les publications PDF/XLSX de hcp.ma — le HTML 
 qu'à les découvrir (liens de téléchargement) et à fournir titre/date, jamais indexé.
 
 Backlog :
+- [x] Trancher la traçabilité et la stratégie de mise à jour des indicateurs BDS
+      (ADR 0004 complété + `docs/complement_conception_bds.pdf` : document
+      synthétique `type="api"`, colonne `indicateur.code_bds`, lookup hybride
+      cache-aside)
 - [ ] Valider en réel `src/bds_client.py` (API BDS, voir ADR 0004) — lancer
       `python -m scripts.telecharger_catalogue_bds` et vérifier `recuperer_indicateur`
       sur quelques codes réels
@@ -112,4 +116,4 @@ la présentation officielle.
 ## Marge (jusqu'à fin août)
 
 Réserve en cas de retard, ou extension (support arabe, amélioration interface, légendage
-visuel des graphique
+visuel des graphiques).
