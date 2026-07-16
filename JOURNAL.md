@@ -55,3 +55,23 @@ de stage en fin de période, pas besoin d'être exhaustif.
   backlog Sprint 2). `IndexeurTexte` devra explicitement ignorer les `Document` de type
   `html` lors de l'indexation.
 - ADR 0003 précisé pour verrouiller cette règle et éviter d'y revenir sans raison.
+
+## 15 juillet 2026 (suite 2) — decouverte de l'API BDS
+
+- Ayman a repere que bds.hcp.ma propose une API pour recuperer les donnees, en plus
+  du telechargement de fichiers. Verification en direct (navigateur connecte,
+  inspection du trafic reseau) : l'API existe bel et bien, non documentee
+  publiquement mais librement accessible, sans authentification.
+- Deux endpoints identifies : `/api/v1/subject-groups` (arborescence complete du
+  catalogue, 832 indicateurs sur 7 themes) et `/api/v1/indicators/{code}` (serie
+  complete d'un indicateur : toutes periodes, toutes dimensions de ventilation).
+  Verifie sur 2 codes reels (I3181, I2818).
+- Couverture confirmee des 3 categories du projet : Population & demographie (49
+  indicateurs), Marche du travail (32), Economie (216).
+- Decision actee en ADR 0004 : utiliser cette API comme source primaire des
+  indicateurs chiffres (remplace en grande partie l'extraction PDF/XLSX pour cette
+  partie-la), le pipeline PDF/XLSX restant necessaire pour le texte narratif et les
+  publications hors catalogue.
+- Cree `src/bds_client.py` (client API) et `scripts/telecharger_catalogue_bds.py`
+  (telecharge et sauvegarde le catalogue local). Pas encore teste en reel depuis le
+  code Python (pas d'acces reseau dans le sandbox) — premiere tache du Sprint 2.

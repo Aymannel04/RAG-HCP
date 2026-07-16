@@ -40,18 +40,23 @@ RAG s'appuie **uniquement** sur les publications PDF/XLSX de hcp.ma — le HTML 
 qu'à les découvrir (liens de téléchargement) et à fournir titre/date, jamais indexé.
 
 Backlog :
+- [ ] Valider en réel `src/bds_client.py` (API BDS, voir ADR 0004) — lancer
+      `python -m scripts.telecharger_catalogue_bds` et vérifier `recuperer_indicateur`
+      sur quelques codes réels
+- [ ] Repenser `ConstructeurIndicateurs` autour de l'API BDS pour Économie/Marché du
+      travail/Population (source primaire), PDF/XLSX en repli pour le reste
 - [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
       sur les 27 pages seed, corriger l'heuristique si besoin (langue déjà corrigée le
-      15/07, un PDF arabe non filtré)
+      15/07, un PDF arabe non filtré) — reste nécessaire pour le texte narratif
 - [ ] Valider en réel `Extracteur._extraire_pdf` (pdfplumber) et `_extraire_xlsx`
       (openpyxl) sur les PDF/XLSX ainsi téléchargés — premier test concluant le 15/07
       (8000+ caractères et tableaux réels extraits d'un PDF), à confirmer sur plus d'échantillons
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25
-- [ ] Curation des 15-20 indicateurs clés (`ConstructeurIndicateurs.structurer`) à
-      partir des tableaux PDF/XLSX
-- [ ] Script d'insertion en base (`db/schema.sql`)
+- [ ] Script d'insertion en base (`db/schema.sql`), adapté pour stocker les indicateurs
+      venant de la BDS (avec le code indicateur BDS comme référence) en plus de ceux
+      extraits de PDF/XLSX
 
 **Definition of done :** les PDF/XLSX collectés en Sprint 1 sont indexés de bout en bout
 (texte + indicateurs) et interrogeables par script. Aucun contenu HTML n'est indexé.
