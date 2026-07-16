@@ -93,3 +93,15 @@ de stage en fin de période, pas besoin d'être exhaustif.
   (lookup hybride cache-aside, pre-remplissage nocturne). Compile sans erreur.
 - Prochaine etape concrete : test reel de `src/bds_client.py` sur la machine
   d'Ayman (`python -m scripts.telecharger_catalogue_bds`).
+
+## 16 juillet 2026 — test réel de l'API BDS
+
+- Lancé `python -m scripts.telecharger_catalogue_bds` sur la machine d'Ayman :
+  succès, `data/bds_catalogue.json` créé, 832 indicateurs, répartition par thème
+  identique à celle vue dans le navigateur (Économie 216, Marché du travail 32,
+  Population & Démographie 49, + 4 autres thèmes hors périmètre projet).
+- Vérifié `recuperer_indicateur("I3181")` en direct : retourne bien la fiche complète
+  (label, métadonnées, 60 périodes trimestrielles de 2007T1 à 2021T4, dimensions et
+  modalités de ventilation par branche d'activité).
+- `src/bds_client.py` est donc validé de bout en bout en conditions réelles. Tâche
+  correspondante cochée dans `TODO.md` (Sprint 2).

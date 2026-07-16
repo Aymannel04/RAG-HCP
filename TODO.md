@@ -44,9 +44,11 @@ Backlog :
       (ADR 0004 complété + `docs/complement_conception_bds.pdf` : document
       synthétique `type="api"`, colonne `indicateur.code_bds`, lookup hybride
       cache-aside)
-- [ ] Valider en réel `src/bds_client.py` (API BDS, voir ADR 0004) — lancer
-      `python -m scripts.telecharger_catalogue_bds` et vérifier `recuperer_indicateur`
-      sur quelques codes réels
+- [x] Valider en réel `src/bds_client.py` (API BDS, voir ADR 0004) : catalogue
+      téléchargé (832 indicateurs, répartition par thème identique à ce qui avait
+      été vérifié dans le navigateur) et `recuperer_indicateur("I3181")` renvoie
+      bien la série complète (périodes T1 2007 à T4 2021 + dimensions/modalités).
+      Testé le 16 juillet 2026 sur la machine d'Ayman.
 - [ ] Repenser `ConstructeurIndicateurs` autour de l'API BDS pour Économie/Marché du
       travail/Population (source primaire), PDF/XLSX en repli pour le reste
 - [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
