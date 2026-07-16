@@ -16,7 +16,7 @@ class Document:
     date_publication: Optional[str]
     langue: str
     categorie: str
-    type: str  # "html", "pdf" ou "xlsx"
+    type: str  # "html", "pdf", "xlsx" ou "api" (fiche synthétique BDS, voir ADR 0004)
     texte_brut: str = ""  # HTML/texte brut avant extraction (non persisté tel quel)
 
 
@@ -42,3 +42,4 @@ class Indicateur:
     periode: str
     region: Optional[str]
     id_document: int
+    code_bds: Optional[str] = None  # code indicateur BDS si venant de l'API (ADR 0004)

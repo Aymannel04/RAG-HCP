@@ -75,3 +75,21 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Cree `src/bds_client.py` (client API) et `scripts/telecharger_catalogue_bds.py`
   (telecharge et sauvegarde le catalogue local). Pas encore teste en reel depuis le
   code Python (pas d'acces reseau dans le sandbox) — premiere tache du Sprint 2.
+
+## 15 juillet 2026 (suite 3) — traçabilité et strategie de mise à jour de l'API BDS
+
+- Deux questions de conception laissees ouvertes par l'ADR 0004 ont ete tranchees
+  avec Ayman : (1) comment tracer un indicateur qui ne vient plus d'un document
+  scrape — decision : un `Document` synthetique par indicateur BDS (`type="api"`,
+  url = fiche bds.hcp.ma/main/indicators/{code}) ; (2) fraicheur vs temps de reponse
+  — decision : strategie hybride cache-aside (pre-remplissage nocturne des
+  indicateurs cures + appel API en direct si absent du cache, avec ecriture du
+  resultat dans la base pour enrichir le cache).
+- ADR 0004 mis a jour avec cette section. `db/schema.sql` : `document.type` accepte
+  desormais `'api'`, et `indicateur` gagne une colonne `code_bds` (cle de cache).
+  `src/models.py` aligne en consequence.
+- Redige `docs/complement_conception_bds.tex/.pdf` : document complementaire au
+  dossier de conception initial, avec le delta MLD et deux diagrammes d'activite
+  (lookup hybride cache-aside, pre-remplissage nocturne). Compile sans erreur.
+- Prochaine etape concrete : test reel de `src/bds_client.py` sur la machine
+  d'Ayman (`python -m scripts.telecharger_catalogue_bds`).

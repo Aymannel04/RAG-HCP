@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS document (
     date_publication  TEXT,
     langue            TEXT NOT NULL DEFAULT 'fr',
     categorie         TEXT,
-    type              TEXT NOT NULL CHECK (type IN ('html', 'pdf', 'xlsx'))
+    type              TEXT NOT NULL CHECK (type IN ('html', 'pdf', 'xlsx', 'api'))
 );
 
 CREATE TABLE IF NOT EXISTS chunk (
@@ -30,9 +30,14 @@ CREATE TABLE IF NOT EXISTS indicateur (
     periode        TEXT NOT NULL,
     region         TEXT,
     id_document    INTEGER NOT NULL,
+    code_bds       TEXT,  -- code indicateur BDS (ex. "I3181"), NULL si extrait d'un PDF/XLSX.
+                           -- Sert de clé de cache pour la stratégie cache-aside (ADR 0004) :
+                           -- avant un appel API en direct, on vérifie s'il existe déjà une
+                           -- ligne avec ce code_bds pour la période demandée.
     FOREIGN KEY (id_document) REFERENCES document (id_document) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunk_document ON chunk (id_document);
 CREATE INDEX IF NOT EXISTS idx_indicateur_document ON indicateur (id_document);
 CREATE INDEX IF NOT EXISTS idx_indicateur_nom_periode ON indicateur (nom, periode);
+CREATE INDEX IF NOT EXISTS idx_indicateur_code_bds ON indicateur (code_bds);
