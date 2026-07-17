@@ -70,6 +70,26 @@ def test_structurer_depuis_bds_sans_dimension_utilise_juste_la_periode():
     assert resultats[0].valeur == 5.4
 
 
+def test_structurer_depuis_bds_gere_dimensions_null():
+    # Bug reel trouve le 17 juillet 2026 sur I2790 "Taux d'urbanisation" : l'API renvoie
+    # "dimensions": null (pas []) quand l'indicateur n'a pas de ventilation. dict.get(cle, [])
+    # ne rattrape pas ce cas car la cle EST presente (juste avec une valeur null).
+    json_sans_dimension = {
+        "code": "I2790",
+        "label": "Taux d'urbanisation",
+        "metaData": {"unit": "%"},
+        "periods": ["2020"],
+        "dimensions": None,
+        "data": {"2020": {"value": "63.5", "footNote": None}},
+    }
+
+    resultats = ConstructeurIndicateurs().structurer_depuis_bds(json_sans_dimension, id_document=1)
+
+    assert len(resultats) == 1
+    assert resultats[0].region is None
+    assert resultats[0].valeur == 63.5
+
+
 def test_construire_document_synthetique():
     doc = ConstructeurIndicateurs.construire_document_synthetique(INDICATEUR_JSON_MOCK)
 

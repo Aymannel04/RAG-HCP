@@ -6,7 +6,7 @@ Deux sources possibles, voir ADR 0004 (docs/adr/0004-api-bds-pour-les-indicateur
 son complément (docs/complement_conception_bds.pdf) :
 - `structurer_depuis_bds` : source primaire pour Économie / Marché du travail / Population,
   à partir d'un indicateur récupéré via `src/bds_client.py`. Implémenté et testé contre la
-  forme réelle de l'API (vérifiée le 16-17 juillet 2026 sur le code I3181).
+  forme réelle de l'API (vérifiée le 16-17 juillet 2026 sur les codes I3181, I2790, ...).
 - `structurer` : repli PDF/XLSX pour le texte hors catalogue BDS. Pas encore implémenté
   (reste dans le backlog Sprint 2, voir TODO.md).
 """
@@ -50,18 +50,25 @@ class ConstructeurIndicateurs:
         """
         code = indicateur_json["code"]
         nom = indicateur_json["label"].strip()
-        unite = indicateur_json.get("metaData", {}).get("unit")
-        periodes_valides = set(indicateur_json.get("periods", []))
+        # `dict.get(cle, defaut)` ne retombe sur `defaut` que si la clé est ABSENTE.
+        # Or l'API renvoie parfois explicitement `null` pour "dimensions" (indicateur
+        # sans ventilation, ex. I2790 "Taux d'urbanisation") — la clé existe, sa valeur
+        # est None, donc `.get("dimensions", [])` renvoie None et non []. D'où le
+        # `or` après chaque `.get(...)` ci-dessous : il rattrape aussi bien la clé
+        # absente que la clé présente avec une valeur null. Bug trouvé sur un vrai run
+        # (voir échange du 17 juillet 2026, TypeError sur I2790).
+        unite = (indicateur_json.get("metaData") or {}).get("unit")
+        periodes_valides = set(indicateur_json.get("periods") or [])
 
         # id de modalité -> label, toutes dimensions confondues (une seule table de
         # correspondance suffit : les id de modalité sont uniques par indicateur).
         labels_modalite: dict[int, str] = {}
-        for dimension in indicateur_json.get("dimensions", []):
-            for modalite in dimension.get("modalites", []):
+        for dimension in indicateur_json.get("dimensions") or []:
+            for modalite in dimension.get("modalites") or []:
                 labels_modalite[modalite["id"]] = modalite["label"].strip()
 
         indicateurs: list[Indicateur] = []
-        for cle, entree in indicateur_json.get("data", {}).items():
+        for cle, entree in (indicateur_json.get("data") or {}).items():
             valeur_brute = entree.get("value")
             if valeur_brute in (None, "", "ND", "NS"):
                 continue

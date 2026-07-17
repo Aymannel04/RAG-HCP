@@ -130,3 +130,16 @@ de stage en fin de période, pas besoin d'être exhaustif.
   net d'activité, taux d'emploi, effectif des chômeurs, chômage par sexe/région,
   structure des actifs occupés) et complété `data/indicateurs_cures.py`. Liste
   curée finale : 18 indicateurs, 6 par catégorie ciblée.
+
+## 17 juillet 2026 (suite) — bug reel : dimensions null sur I2790
+
+- Test reel de `scripts/preremplir_indicateurs_bds.py` sur les 18 codes cures (par
+  Ayman) : I1588 et I1590 ok (273 et 6757 lignes), puis crash sur I2790 "Taux
+  d'urbanisation" : `TypeError: 'NoneType' object is not iterable`.
+- Cause : l'API renvoie `"dimensions": null` (pas `[]`) quand l'indicateur n'a pas de
+  ventilation. `dict.get("dimensions", [])` ne rattrape pas ce cas car la cle EST
+  presente, juste avec une valeur `null` — le repli par defaut de `.get()` ne joue que
+  si la cle est absente.
+- Corrige dans `structurer_depuis_bds` : chaque `.get(...)` a risque est suivi d'un
+  `or []`/`or {}` pour absorber a la fois cle absente et valeur null. Ajoute un test de
+  regression avec `dimensions: None`. Suite complete : 10/10 tests.
