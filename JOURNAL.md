@@ -152,3 +152,25 @@ de stage en fin de période, pas besoin d'être exhaustif.
   des prix a la consommation", detaille par produit et par mois).
 - `ConstructeurIndicateurs` est donc valide en conditions reelles sur l'integralite
   de la liste curee, pas seulement sur I3181. Item du backlog Sprint 2 confirme.
+
+## 17 juillet 2026 (suite 3) — detection PDF/XLSX validee, "sur-detection" non confirmee
+
+- Decouvert que web_fetch (contrairement a curl/requests dans le sandbox, bloques par
+  le proxy) peut atteindre www.hcp.ma. Recupere le HTML reel (converti en markdown par
+  l'outil) de 4 pages seed representatives : note de conjoncture (1 piece jointe),
+  rapport d'enquete avec tabulations (2), page RGPH regionale (8 fichiers), bulletin
+  emploi trimestriel (1).
+- Reconstruit fidelement les balises <a> de ces 4 pages (338 liens au total : menus,
+  sidebar, reseaux sociaux, pied de page inclus) et fait tourner le vrai code
+  `Scraper._detecter_pieces_jointes` dessus (pas une reimplementation).
+- Resultat : 0 faux positif, 0 faux negatif sur les 4 pages. La sur-detection
+  suspectee en Sprint 1 (rapport_sprint1.pdf) n'est pas confirmee par ces tests reels
+  - hypothese la plus probable : confusion avec des pages ayant legitimement plusieurs
+  pieces jointes (le cas RGPH regional, 8 fichiers tous reels, avait pu etre lu comme
+  de la sur-detection sans verification directe du HTML a l'epoque).
+- Aucune correction de code necessaire. Ajoute 2 tests de regression dans
+  `tests/test_scraper.py` avec des fixtures reconstruites depuis le vrai HTML, pour
+  verrouiller ce resultat. Suite complete : 12/12 tests.
+- Limite assumee : test sur 4/27 pages, HTML reconstruit depuis du markdown (pas les
+  octets bruts). A confirmer par un run complet sur les 27 pages en conditions 100%
+  reelles depuis la machine d'Ayman pour cloturer definitivement ce point.

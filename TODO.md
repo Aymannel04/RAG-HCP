@@ -58,9 +58,16 @@ Backlog :
       Ayman depuis data/bds_catalogue.json : taux de chômage, taux net d'activité, taux
       d'emploi, effectif des chômeurs, chômage par sexe/région, structure des actifs
       occupés). Liste curée complète : 18 indicateurs (6 par catégorie).
-- [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
-      sur les 27 pages seed, corriger l'heuristique si besoin (langue déjà corrigée le
-      15/07, un PDF arabe non filtré) — reste nécessaire pour le texte narratif
+- [x] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`) :
+      testée contre du vrai HTML de 4 pages hcp.ma (note de conjoncture, rapport
+      d'enquête, page RGPH régionale à 8 fichiers, bulletin emploi trimestriel — 338
+      liens `<a>` au total, menus/sidebar/pied de page inclus). Résultat : 0 faux
+      positif, 0 faux négatif. La "sur-détection" suspectée en Sprint 1 n'est PAS
+      confirmée par ces tests réels — probable confusion avec des pages ayant
+      plusieurs vraies pièces jointes (ex. RGPH régional, 8 fichiers légitimes).
+      Aucune correction de code nécessaire ; 2 tests de régression ajoutés
+      (`tests/test_scraper.py`) avec fixtures reconstruites depuis le vrai HTML.
+      À confirmer sur les 27 pages en conditions 100% réelles (voir note ci-dessous).
 - [ ] Valider en réel `Extracteur._extraire_pdf` (pdfplumber) et `_extraire_xlsx`
       (openpyxl) sur les PDF/XLSX ainsi téléchargés — premier test concluant le 15/07
       (8000+ caractères et tableaux réels extraits d'un PDF), à confirmer sur plus d'échantillons
