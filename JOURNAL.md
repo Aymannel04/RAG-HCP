@@ -125,3 +125,8 @@ de stage en fin de période, pas besoin d'être exhaustif.
   sur la liste curée (pas encore d'upsert en base, ça reste un item séparé du backlog).
 - 3 nouveaux tests unitaires (`tests/test_constructeur_indicateurs.py`), mock fidèle à
   la forme réelle de l'API. Suite complète : 9/9 tests passent.
+- Ayman a fourni les 32 indicateurs du thème Marché du travail depuis son
+  `data/bds_catalogue.json` local. Choisi 6 codes headline (taux de chômage, taux
+  net d'activité, taux d'emploi, effectif des chômeurs, chômage par sexe/région,
+  structure des actifs occupés) et complété `data/indicateurs_cures.py`. Liste
+  curée finale : 18 indicateurs, 6 par catégorie ciblée.

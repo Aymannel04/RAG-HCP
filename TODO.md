@@ -54,9 +54,10 @@ Backlog :
       60 périodes) + `construire_document_synthetique()`, `data/indicateurs_cures.py`
       (12 codes réels vérifiés, Population & Économie), `scripts/preremplir_indicateurs_bds.py`,
       3 tests unitaires (mock fidèle à la forme réelle de l'API). PDF/XLSX reste le repli.
-- [ ] Compléter `data/indicateurs_cures.py` avec 5-6 codes Marché du travail (thème pas
-      récupéré lors de l'inspection réseau du 17/07 — chercher dans data/bds_catalogue.json,
-      colonne theme_label == "Marché du travail")
+- [x] Compléter `data/indicateurs_cures.py` avec Marché du travail (6 codes fournis par
+      Ayman depuis data/bds_catalogue.json : taux de chômage, taux net d'activité, taux
+      d'emploi, effectif des chômeurs, chômage par sexe/région, structure des actifs
+      occupés). Liste curée complète : 18 indicateurs (6 par catégorie).
 - [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
       sur les 27 pages seed, corriger l'heuristique si besoin (langue déjà corrigée le
       15/07, un PDF arabe non filtré) — reste nécessaire pour le texte narratif

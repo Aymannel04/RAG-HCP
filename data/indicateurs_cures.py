@@ -5,14 +5,10 @@ complément de conception).
 
 Chaque code a été vérifié réel : soit par appel direct à
 `GET https://bds.hcp.ma/api/v1/indicators/{code}` (I3181), soit trouvé dans le
-catalogue réel via `GET https://bds.hcp.ma/api/v1/subject-groups` le 17 juillet 2026
-(voir data/bds_catalogue.json, généré par scripts/telecharger_catalogue_bds.py).
-
-Marché du travail : thème pas encore couvert ici (32 indicateurs au catalogue, non
-récupérés lors de l'inspection réseau — réponse trop volumineuse, coupée avant ce
-thème). À compléter : chercher dans data/bds_catalogue.json (généré en local) les
-entrées avec theme_label == "Marché du travail" et ajouter 5-6 codes pertinents
-(taux de chômage, taux d'activité, population active occupée...).
+catalogue réel via `GET https://bds.hcp.ma/api/v1/subject-groups` (Population &
+Démographie et Économie récupérés le 17 juillet 2026 par web_fetch ; Marché du
+travail fourni par Ayman le même jour depuis data/bds_catalogue.json, la réponse
+web_fetch ayant été coupée avant ce thème).
 """
 from __future__ import annotations
 
@@ -35,5 +31,11 @@ INDICATEURS_CURES: list[tuple[str, str]] = [
     ("I1434", "Economie"),  # Importations aux prix courants
     ("I3181", "Economie"),  # Valeurs ajoutées par branche d'activité (Trimestrielle) -- testé en réel le 16/07
 
-    # --- Marché du travail --- (à compléter, voir docstring ci-dessus)
+    # --- Marché du travail ---
+    ("I4001", "Marché du travail"),  # Taux de chômage selon le Milieu, le sexe et le groupe d'âges
+    ("I40", "Marché du travail"),    # Taux net d'activité
+    ("I1465", "Marché du travail"),  # Taux d'emploi des 15 ans et plus
+    ("I2868", "Marché du travail"),  # Effectif des chômeurs
+    ("I3287", "Marché du travail"),  # Taux de chômage par sexe et région
+    ("I2863", "Marché du travail"),  # Structure des actifs occupés
 ]
