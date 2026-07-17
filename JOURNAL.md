@@ -174,3 +174,26 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Limite assumee : test sur 4/27 pages, HTML reconstruit depuis du markdown (pas les
   octets bruts). A confirmer par un run complet sur les 27 pages en conditions 100%
   reelles depuis la machine d'Ayman pour cloturer definitivement ce point.
+
+## 17 juillet 2026 (suite 4) — Extracteur valide sur PDF reels + decouverte DOCX
+
+- Teste `Extracteur._extraire_pdf` (vrai code) sur les fichiers deja presents dans
+  `data/raw/` (telecharges lors des tests precedents). 47 fichiers ".pdf" au total,
+  mais 14 se sont reveles invalides (signatures PK ou OLE2, pas %PDF-) : verifie via
+  horodatage git que ces 14 fichiers datent de 17h00-17h14 le 15/07, soit AVANT le
+  commit e2fa9bc (17h20, fix `_contenu_semble_valide`). Confirmes stale, supprimes.
+- Sur les 33 fichiers valides restants : 30 traites sans erreur (texte + tableaux
+  coherents, de 2 a 645 tableaux selon le fichier). 2 gros PDF tres denses en tableaux
+  ("Tabulations", ~4.3 Mo) n'ont pas fini l'extraction en moins de 40s dans le sandbox
+  (limite d'un appel bash) - a chronometrer sans cette contrainte sur la machine
+  d'Ayman. Le fichier de 14 Mo pas encore teste, faute de temps.
+- Decouverte importante en cherchant un exemple de vrai .xlsx a tester : les pages
+  IPC et IPPI (categorie Economie, dans seed_urls.py) ne publient leur note mensuelle
+  qu'en **.docx** (FR+AR), pas en PDF ni Excel. Confirme sur 2 pages via web_fetch.
+  Le lien `/attachment/{id}/` est actuellement classe "pdf" par defaut par
+  `_detecter_pieces_jointes`, puis correctement rejete par `_contenu_semble_valide`
+  (bon comportement defensif : pas de crash, pas de fausse donnee) mais consequence :
+  ces publications finissent avec 0 contenu indexe pour le RAG.
+- `_extraire_xlsx` reste donc non teste en reel (aucun vrai .xlsx trouve a ce jour).
+- Question ouverte posee a Ayman : etendre le perimetre de l'ADR 0003 pour supporter
+  le .docx (nouvelle branche d'extraction, python-docx), ou accepter ce trou pour la V1.

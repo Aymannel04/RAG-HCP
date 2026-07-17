@@ -68,9 +68,22 @@ Backlog :
       Aucune correction de code nécessaire ; 2 tests de régression ajoutés
       (`tests/test_scraper.py`) avec fixtures reconstruites depuis le vrai HTML.
       À confirmer sur les 27 pages en conditions 100% réelles (voir note ci-dessous).
-- [ ] Valider en réel `Extracteur._extraire_pdf` (pdfplumber) et `_extraire_xlsx`
-      (openpyxl) sur les PDF/XLSX ainsi téléchargés — premier test concluant le 15/07
-      (8000+ caractères et tableaux réels extraits d'un PDF), à confirmer sur plus d'échantillons
+- [x] Valider en réel `Extracteur._extraire_pdf` sur les vrais PDF déjà téléchargés
+      (`data/raw/`) : 30/33 fichiers valides traités sans erreur (texte + tableaux
+      cohérents, de 2 à 645 tableaux selon le fichier) ; 2 gros PDF très denses en
+      tableaux ("Tabulations", 4.3 Mo) n'ont pas fini en moins de 40s dans le sandbox —
+      à chronométrer sur ta machine sans cette contrainte ; le fichier de 14 Mo pas
+      encore testé. Nettoyé 14 fichiers invalides dans `data/raw/` (antérieurs au fix
+      `_contenu_semble_valide` du 15/07, confirmés stale par horodatage git).
+- [ ] `_extraire_xlsx` toujours pas testé en réel : aucun vrai .xlsx dans le jeu de
+      données actuel. **Découverte importante (17/07)** : plusieurs pages Économie
+      (IPC, IPPI — vérifiées ; probablement ICE aussi) ne publient leur note mensuelle
+      qu'en **.docx** (FR+AR), pas en PDF ni XLSX. Le lien `/attachment/{id}/` est
+      actuellement classé "pdf" par défaut par `Scraper._detecter_pieces_jointes`,
+      puis rejeté par `_contenu_semble_valide` (bon comportement défensif, mais ces
+      publications finissent avec 0 contenu indexé). Décision à prendre avec Ayman :
+      ajouter le support .docx (extension du périmètre ADR 0003) ou accepter ce trou
+      pour la V1.
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25
