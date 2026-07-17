@@ -49,8 +49,14 @@ Backlog :
       été vérifié dans le navigateur) et `recuperer_indicateur("I3181")` renvoie
       bien la série complète (périodes T1 2007 à T4 2021 + dimensions/modalités).
       Testé le 16 juillet 2026 sur la machine d'Ayman.
-- [ ] Repenser `ConstructeurIndicateurs` autour de l'API BDS pour Économie/Marché du
-      travail/Population (source primaire), PDF/XLSX en repli pour le reste
+- [x] Repenser `ConstructeurIndicateurs` autour de l'API BDS : `structurer_depuis_bds()`
+      (parsing testé contre la vraie réponse de I3181 : 1020 lignes, 17 ventilations x
+      60 périodes) + `construire_document_synthetique()`, `data/indicateurs_cures.py`
+      (12 codes réels vérifiés, Population & Économie), `scripts/preremplir_indicateurs_bds.py`,
+      3 tests unitaires (mock fidèle à la forme réelle de l'API). PDF/XLSX reste le repli.
+- [ ] Compléter `data/indicateurs_cures.py` avec 5-6 codes Marché du travail (thème pas
+      récupéré lors de l'inspection réseau du 17/07 — chercher dans data/bds_catalogue.json,
+      colonne theme_label == "Marché du travail")
 - [ ] Valider en réel la détection de liens PDF/XLSX (`Scraper._detecter_pieces_jointes`)
       sur les 27 pages seed, corriger l'heuristique si besoin (langue déjà corrigée le
       15/07, un PDF arabe non filtré) — reste nécessaire pour le texte narratif

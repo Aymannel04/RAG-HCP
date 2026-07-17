@@ -105,3 +105,23 @@ de stage en fin de période, pas besoin d'être exhaustif.
   modalités de ventilation par branche d'activité).
 - `src/bds_client.py` est donc validé de bout en bout en conditions réelles. Tâche
   correspondante cochée dans `TODO.md` (Sprint 2).
+
+## 17 juillet 2026 — ConstructeurIndicateurs repensé autour de l'API BDS
+
+- Récupéré en direct (web_fetch) la réponse réelle de `GET /api/v1/indicators/I3181` :
+  la forme exacte de `data` n'était pas documentée dans l'ADR 0004 (juste "JSON
+  structuré") — en réalité c'est un dict plat `{"idModalite_periode": {"value":...}}`.
+  Implémenté `ConstructeurIndicateurs.structurer_depuis_bds()` en généralisant sur ce
+  format (0, 1 ou plusieurs dimensions croisées) et vérifié contre la vraie réponse :
+  1020 lignes construites pour I3181 (17 branches x 60 périodes), toutes correctes.
+- Ajouté `construire_document_synthetique()` (Option A de l'ADR 0004 : type="api",
+  url=fiche BDS, titre=label, date_publication dérivée du champ `updatingDate`).
+- Récupéré (web_fetch, en 2 appels vu la taille) le catalogue réel pour les thèmes
+  Population & Démographie (49) et Économie (216) ; le thème Marché du travail n'a
+  pas pu être récupéré (réponse coupée avant). Constitué `data/indicateurs_cures.py`
+  avec 12 codes réels vérifiés sur ces deux thèmes ; Marché du travail à compléter
+  (item ajouté au TODO).
+- `scripts/preremplir_indicateurs_bds.py` : orchestration bds_client -> Constructeur
+  sur la liste curée (pas encore d'upsert en base, ça reste un item séparé du backlog).
+- 3 nouveaux tests unitaires (`tests/test_constructeur_indicateurs.py`), mock fidèle à
+  la forme réelle de l'API. Suite complète : 9/9 tests passent.
