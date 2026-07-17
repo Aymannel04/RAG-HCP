@@ -106,3 +106,51 @@ def test_detecter_pieces_jointes_plusieurs_vraies_pieces_jointes_pas_confondu_av
 
     assert {href for href, _, _ in pieces} == set(hrefs_reels)
     assert len(pieces) == 8
+
+
+# --- ADR 0005 : support DOCX --------------------------------------------------------
+#
+# Decouvert le 17 juillet 2026 : les pages IPC/IPPI (categorie Economie) ne publient
+# leur note mensuelle qu'en .docx, jamais en PDF/XLSX. Href sans extension visible
+# (/attachment/{id}/), extension uniquement dans le texte du lien — meme schema que les
+# PDF/XLSX. Fixture reconstruite depuis la vraie page IPC Mai 2026.
+
+def test_detecter_pieces_jointes_reconnait_le_docx():
+    html = (
+        MENU_HCP_TYPE
+        + '<a href="https://www.hcp.ma/attachment/2885946/">IPC_Mai 2026_Fr.docx</a>'
+    )
+    soup = BeautifulSoup(html, "lxml")
+
+    pieces = Scraper._detecter_pieces_jointes(soup)
+
+    assert pieces == [("https://www.hcp.ma/attachment/2885946/", "docx", "fr")]
+
+
+def test_contenu_semble_valide_distingue_xlsx_et_docx():
+    # XLSX et DOCX sont tous deux des ZIP (signature "PK" identique) : on ne peut pas
+    # se fier a la seule signature. Fixtures generees a la volee avec les vraies
+    # bibliotheques (pas de fichier externe necessaire).
+    import io
+
+    from docx import Document as DocxDocument
+    from openpyxl import Workbook
+
+    tampon_docx = io.BytesIO()
+    DocxDocument().save(tampon_docx)
+    contenu_docx = tampon_docx.getvalue()
+
+    tampon_xlsx = io.BytesIO()
+    Workbook().save(tampon_xlsx)
+    contenu_xlsx = tampon_xlsx.getvalue()
+
+    assert Scraper._contenu_semble_valide(contenu_docx, "docx") is True
+    assert Scraper._contenu_semble_valide(contenu_docx, "xlsx") is False
+
+    assert Scraper._contenu_semble_valide(contenu_xlsx, "xlsx") is True
+    assert Scraper._contenu_semble_valide(contenu_xlsx, "docx") is False
+
+
+def test_nom_fichier_piece_gere_extension_docx():
+    nom = Scraper._nom_fichier_piece("https://www.hcp.ma/attachment/2885946/", "docx")
+    assert nom == "2885946.docx"

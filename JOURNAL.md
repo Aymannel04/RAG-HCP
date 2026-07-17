@@ -197,3 +197,42 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - `_extraire_xlsx` reste donc non teste en reel (aucun vrai .xlsx trouve a ce jour).
 - Question ouverte posee a Ayman : etendre le perimetre de l'ADR 0003 pour supporter
   le .docx (nouvelle branche d'extraction, python-docx), ou accepter ce trou pour la V1.
+
+## 17 juillet 2026 (suite 5) — Implementation du support DOCX (ADR 0005)
+
+- Ayman tranche la question ouverte : etendre le perimetre au .docx plutot
+  qu'accepter le trou (IPC/IPPI sont des publications mensuelles recurrentes, avec
+  du contenu chiffre et narratif propre - les laisser hors RAG serait une perte
+  reelle, pas un simple detail de couverture).
+- Redige `docs/adr/0005-extension-docx.md` (Statut/Contexte/Decision/Justification/
+  Consequences) documentant la decouverte, la decision et son impact code.
+- `db/schema.sql` : `document.type` accepte desormais `'docx'` en plus de
+  `'html'/'pdf'/'xlsx'/'api'`.
+- `src/models.py` : commentaire du champ `Document.type` mis a jour ; aucun autre
+  changement structurel necessaire (un `Document` docx produit du texte + tableaux,
+  exactement comme un PDF).
+- `src/scraper.py` : nouvelle constante `EXTENSIONS_DOCX` ; `_detecter_pieces_jointes`
+  reconnait maintenant les liens `.docx` (meme logique que xlsx/pdf, y compris
+  `/attachment/{id}/` sans extension visible dans le href) ; `_telecharger_piece_jointe`
+  reconnait le Content-Type `wordprocessingml`/`msword`. Point delicat : XLSX et DOCX
+  sont tous deux des archives ZIP, donc partagent la meme signature magique `PK` -
+  `_contenu_semble_valide` a du etre renforcee pour verifier en plus la presence du
+  dossier interne caracteristique (`xl/` pour XLSX, `word/` pour DOCX), sinon un
+  .docx aurait pu passer la validation en se faisant passer pour un xlsx corrompu
+  ou l'inverse. C'est precisement ce risque qui avait cause le bug des 14 fichiers
+  stale nettoyes dans l'entree precedente (des .docx sauvegardes sous extension .pdf).
+- `src/extracteur.py` : nouvelle methode `_extraire_docx` (python-docx), extrait
+  les paragraphes non vides (texte narratif) et les tableaux (lignes non vides
+  uniquement) separement, comme pour `_extraire_pdf`. Ajoutee au dispatch de
+  `extraire()` sur `document.type == "docx"`.
+- `requirements.txt` : ajout de `python-docx>=1.1`.
+- 6 nouveaux tests ajoutes : 3 dans `tests/test_scraper.py` (detection d'un lien
+  DOCX reel - motif IPC `/attachment/2885946/` + texte "IPC_Mai 2026_Fr.docx" -,
+  distinction xlsx/docx a la validation via de vrais octets ZIP generes a la volee,
+  nommage de fichier avec extension .docx) et 1 dans `tests/test_extracteur.py`
+  (extraction sur une fixture .docx generee en reel via python-docx, avec verification
+  que les paragraphes vides ne polluent pas le texte extrait). Suite complete :
+  16/16 tests passes.
+- Limite assumee, explicitement notee dans l'ADR 0005 : tout ceci est valide contre
+  des fixtures generees synthetiquement par python-docx, PAS contre un vrai fichier
+  IPC/IPPI telecharge depuis hcp.ma. C'est la prochaine etape.

@@ -16,7 +16,7 @@ class Document:
     date_publication: Optional[str]
     langue: str
     categorie: str
-    type: str  # "html", "pdf", "xlsx" ou "api" (fiche synthétique BDS, voir ADR 0004)
+    type: str  # "html", "pdf", "xlsx", "docx" (ADR 0005) ou "api" (fiche synthétique BDS, ADR 0004)
     texte_brut: str = ""  # HTML/texte brut avant extraction (non persisté tel quel)
 
 

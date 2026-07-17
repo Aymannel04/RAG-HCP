@@ -1,13 +1,13 @@
 """
 Module Scraper — module 1 de l'architecture (docs/conception_uml_v3.pdf, figure 4).
 Role : collecter les pages HTML des categories ciblees du site hcp.ma, ET les pieces
-jointes (PDF / XLSX) qu'elles referencent — voir ADR 0003
-(docs/adr/0003-ingestion-pdf-xlsx.md).
+jointes (PDF / XLSX / DOCX) qu'elles referencent — voir ADR 0003
+(docs/adr/0003-ingestion-pdf-xlsx.md) et ADR 0005 (docs/adr/0005-extension-docx.md).
 
 Constat du 15 juillet 2026 (test reel sur 27 pages) : les pages HTML ne portent qu'un
 resume court de l'article ; les vraies donnees (tableaux complets, series chiffrees)
-sont dans des PDF/XLSX telecharges depuis ces pages. Le Scraper doit donc detecter et
-telecharger ces pieces jointes, pas seulement lire le HTML de la page elle-meme.
+sont dans des PDF/XLSX/DOCX telecharges depuis ces pages. Le Scraper doit donc detecter
+et telecharger ces pieces jointes, pas seulement lire le HTML de la page elle-meme.
 
 Statut : la collecte de page HTML + titre/date est fonctionnelle et testee en reel
 (27/27). La detection/telechargement de pieces jointes a ete testee en reel une premiere
@@ -15,6 +15,8 @@ fois le 15 juillet : le telechargement marche (8000+ caracteres et de vrais tabl
 donnees extraits d'un PDF reel), mais le premier test a remonte un vrai PDF en arabe
 alors que le champ langue etait code en dur "fr" — corrige ci-dessous (detection de la
 langue + filtrage arabe pour l'instant, voir TODO.md/support arabe en marge V1).
+Le 17 juillet 2026, decouverte que certaines pages (IPC, IPPI) ne publient qu'en DOCX —
+support ajoute (ADR 0005) plutot que de laisser ces publications sans contenu indexe.
 """
 from __future__ import annotations
 
@@ -32,16 +34,19 @@ from .models import Document
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; HCP-RAG-Stage/0.1; usage academique interne)"}
 
-# Dossier de stockage des fichiers bruts telecharges (PDF/XLSX). Volontairement hors
-# du depot git (voir .gitignore : data/raw/) — trop volumineux pour etre versionne.
+# Dossier de stockage des fichiers bruts telecharges (PDF/XLSX/DOCX). Volontairement
+# hors du depot git (voir .gitignore : data/raw/) — trop volumineux pour etre versionne.
 DOSSIER_BRUT = Path(__file__).resolve().parent.parent / "data" / "raw"
 
-# Indices utilises pour reperer un lien de telechargement PDF/XLSX sur une page hcp.ma.
-# Heuristique construite a partir des pages observees le 15 juillet 2026 (notes de
-# conjoncture) : le href ne contient pas toujours l'extension (ex. /attachment/2866603/,
-# /file/247582/), mais le texte du lien, son attribut title, ou l'icone associee si.
+# Indices utilises pour reperer un lien de telechargement PDF/XLSX/DOCX sur une page
+# hcp.ma. Heuristique construite a partir des pages observees le 15 juillet 2026 (notes
+# de conjoncture) : le href ne contient pas toujours l'extension (ex.
+# /attachment/2866603/, /file/247582/), mais le texte du lien, son attribut title, ou
+# l'icone associee si. Le DOCX suit le meme schema (ex. page IPC : href
+# "/attachment/2885946/", texte du lien "IPC_Mai 2026_Fr.docx" — verifie le 17/07/2026).
 EXTENSIONS_XLSX = (".xlsx", ".xls")
 EXTENSIONS_PDF = (".pdf",)
+EXTENSIONS_DOCX = (".docx",)
 INDICES_HREF_TELECHARGEMENT = ("/attachment/", "/file/")
 
 # Indices de langue observes dans les noms de fichiers hcp.ma (ex. "Note Conj_Fr.pdf"
@@ -52,7 +57,7 @@ INDICES_FRANCAIS = ("_fr.", "_fr)", "(fr)", " fr)", "version fr", "francais", "f
 
 
 class Scraper:
-    """Collecte les pages et pieces jointes (PDF/XLSX) des categories ciblees de hcp.ma."""
+    """Collecte les pages et pieces jointes (PDF/XLSX/DOCX) des categories ciblees de hcp.ma."""
 
     def __init__(
         self,
@@ -69,7 +74,7 @@ class Scraper:
 
     def collecter(self, urls: list[str], categorie: str = "") -> list[Document]:
         """Recupere chaque URL de la liste et retourne les Document correspondants
-        (page HTML + pieces jointes PDF/XLSX detectees sur chaque page).
+        (page HTML + pieces jointes PDF/XLSX/DOCX detectees sur chaque page).
 
         Les echecs individuels (page indisponible, timeout) sont journalises et ignores
         plutot que d'interrompre toute la collecte.
@@ -151,11 +156,13 @@ class Scraper:
 
     @classmethod
     def _detecter_pieces_jointes(cls, soup: BeautifulSoup) -> list[tuple[str, str, str]]:
-        """Repere les liens de telechargement PDF/XLSX sur une page article, avec leur langue.
+        """Repere les liens de telechargement PDF/XLSX/DOCX sur une page article, avec
+        leur langue.
 
         Heuristique (affinee le 15 juillet apres un premier test reel qui a remonte un PDF
-        arabe non identifie comme tel) : on regarde le href, le texte du lien, l'attribut
-        title, et le src des images contenues dans le lien (icones "pdf.jpg", "icon_pdf.gif"
+        arabe non identifie comme tel ; etendue le 17 juillet au DOCX, voir ADR 0005) : on
+        regarde le href, le texte du lien, l'attribut title, et le src des images
+        contenues dans le lien (icones "pdf.jpg", "icon_pdf.gif", "icon_docx.gif"
         observees sur le site), pour determiner a la fois le type de fichier et sa langue.
         """
         pieces: list[tuple[str, str, str]] = []
@@ -169,6 +176,8 @@ class Scraper:
 
             if any(ext in signal for ext in EXTENSIONS_XLSX):
                 pieces.append((href, "xlsx", langue))
+            elif any(ext in signal for ext in EXTENSIONS_DOCX):
+                pieces.append((href, "docx", langue))
             elif any(ext in signal for ext in EXTENSIONS_PDF):
                 pieces.append((href, "pdf", langue))
             elif any(indice in href for indice in INDICES_HREF_TELECHARGEMENT):
@@ -194,6 +203,8 @@ class Scraper:
         content_type = resp.headers.get("Content-Type", "").lower()
         if "spreadsheet" in content_type or "excel" in content_type:
             type_fichier = "xlsx"
+        elif "wordprocessingml" in content_type or "msword" in content_type:
+            type_fichier = "docx"
         elif "pdf" in content_type:
             type_fichier = "pdf"
         else:
@@ -201,9 +212,11 @@ class Scraper:
 
         # Verification du contenu reel (nombres magiques), pas seulement du Content-Type :
         # l'heuristique de detection de liens est large et attrape parfois des liens qui ne
-        # menent pas vraiment a un PDF/XLSX (page d'erreur, redirection...). Sans ce controle,
-        # un fichier invalide fait planter pdfplumber/openpyxl plus tard dans le pipeline
-        # (vu en reel le 15 juillet : "PDFSyntaxError: No /Root object! - Is this really a PDF?").
+        # menent pas vraiment a un PDF/XLSX/DOCX (page d'erreur, redirection...). Sans ce
+        # controle, un fichier invalide fait planter pdfplumber/openpyxl/python-docx plus
+        # tard dans le pipeline (vu en reel le 15 juillet : "PDFSyntaxError: No /Root
+        # object! - Is this really a PDF?" ; et le 17 juillet : des .docx recuperes AVANT
+        # ce fix trainaient dans data/raw/ sous une fausse extension .pdf).
         if not self._contenu_semble_valide(resp.content, type_fichier):
             print(
                 f"[Scraper] contenu invalide pour {url_piece} "
@@ -230,18 +243,28 @@ class Scraper:
     @staticmethod
     def _contenu_semble_valide(contenu: bytes, type_fichier: str) -> bool:
         """Verifie les nombres magiques du fichier telecharge plutot que de se fier
-        uniquement au Content-Type (parfois absent ou trompeur sur des liens indirects)."""
+        uniquement au Content-Type (parfois absent ou trompeur sur des liens indirects).
+
+        XLSX et DOCX sont tous deux des archives ZIP (signature "PK") : la seule
+        signature ne suffit pas a les distinguer. Decouverte concrete le 17 juillet 2026
+        en diagnostiquant des fichiers .docx recuperes (avant ce fix) sous une fausse
+        extension .pdf dans data/raw/ — on verifie donc en plus la presence du dossier
+        interne caracteristique du format attendu (xl/ pour XLSX, word/ pour DOCX).
+        """
         if type_fichier == "pdf":
             return contenu[:5] == b"%PDF-"
-        if type_fichier == "xlsx":
-            # Un .xlsx est une archive ZIP (signature "PK").
-            return contenu[:2] == b"PK"
+        if type_fichier in ("xlsx", "docx"):
+            if contenu[:2] != b"PK":
+                return False
+            dossier_attendu = b"xl/" if type_fichier == "xlsx" else b"word/"
+            return dossier_attendu in contenu
         return True
 
     @staticmethod
     def _nom_fichier_piece(href: str, type_fichier: str) -> str:
         base = re.sub(r"[^\w\-]", "_", href.strip("/").split("/")[-1]) or "piece"
-        extension = ".xlsx" if type_fichier == "xlsx" else ".pdf"
+        extensions_par_type = {"xlsx": ".xlsx", "docx": ".docx"}
+        extension = extensions_par_type.get(type_fichier, ".pdf")
         return base if base.endswith(extension) else base + extension
 
 

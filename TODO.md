@@ -76,14 +76,16 @@ Backlog :
       encore testé. Nettoyé 14 fichiers invalides dans `data/raw/` (antérieurs au fix
       `_contenu_semble_valide` du 15/07, confirmés stale par horodatage git).
 - [ ] `_extraire_xlsx` toujours pas testé en réel : aucun vrai .xlsx dans le jeu de
-      données actuel. **Découverte importante (17/07)** : plusieurs pages Économie
-      (IPC, IPPI — vérifiées ; probablement ICE aussi) ne publient leur note mensuelle
-      qu'en **.docx** (FR+AR), pas en PDF ni XLSX. Le lien `/attachment/{id}/` est
-      actuellement classé "pdf" par défaut par `Scraper._detecter_pieces_jointes`,
-      puis rejeté par `_contenu_semble_valide` (bon comportement défensif, mais ces
-      publications finissent avec 0 contenu indexé). Décision à prendre avec Ayman :
-      ajouter le support .docx (extension du périmètre ADR 0003) ou accepter ce trou
-      pour la V1.
+      données actuel (aucun exemplaire trouvé sur les pages seed à ce jour).
+- [x] Support DOCX ajouté (ADR 0005, décision prise avec Ayman le 17/07 : étendre plutôt
+      qu'accepter le trou) : `Scraper` détecte/télécharge/valide les `.docx` (même
+      schéma que PDF/XLSX, `/attachment/{id}/` sans extension visible dans le href) ;
+      `_contenu_semble_valide` renforcé pour distinguer XLSX et DOCX (tous deux des ZIP,
+      signature `PK` identique — vérifie maintenant le dossier interne `xl/` vs `word/`) ;
+      `Extracteur._extraire_docx` (python-docx) ajouté. `db/schema.sql`/`models.py` mis
+      à jour (`type` accepte `'docx'`). 6 nouveaux tests (détection, validation
+      xlsx/docx, extraction avec fixture générée à la volée). Suite complète : 16/16.
+      **Reste à valider en conditions réelles** sur un vrai .docx IPC/IPPI téléchargé.
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25

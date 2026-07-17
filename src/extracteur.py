@@ -1,16 +1,21 @@
 """
 Module Extracteur — module 2 de l'architecture.
-Role : nettoyer chaque type de document collecte (HTML, PDF, XLSX) et separer texte
-narratif et tableaux de chiffres (voir docs/fiche_cadrage_v4.pdf, section 8.1, et
-ADR 0003 sur l'ingestion PDF/XLSX).
+Role : nettoyer chaque type de document collecte (HTML, PDF, XLSX, DOCX) et separer
+texte narratif et tableaux de chiffres (voir docs/fiche_cadrage_v4.pdf, section 8.1,
+ADR 0003 sur l'ingestion PDF/XLSX, et ADR 0005 sur l'extension au DOCX).
 
 Statut :
 - HTML : fonctionnel, mais la strategie "tous les <p>, tous les <table>" s'est revelee
   insuffisante sur un vrai gabarit hcp.ma (menus rendus en <table>, corps d'article pas
   toujours dans des <p>) — a retravailler une fois qu'on aura un extrait de HTML reel
-  (voir echange du 15 juillet 2026).
-- PDF : implemente avec pdfplumber. PAS ENCORE teste sur un vrai PDF hcp.ma.
-- XLSX : implemente avec openpyxl. PAS ENCORE teste sur un vrai fichier hcp.ma.
+  (voir echange du 15 juillet 2026). De toute facon jamais indexe (ADR 0003).
+- PDF : implemente avec pdfplumber. Valide en reel le 17 juillet 2026 sur 30 vrais PDF
+  hcp.ma (texte + tableaux coherents, aucune erreur). 2 gros PDF tres denses en tableaux
+  restent lents (>40s) — a surveiller si ca devient un probleme en indexation par lot.
+- XLSX : implemente avec openpyxl. PAS ENCORE teste sur un vrai fichier hcp.ma (aucun
+  exemplaire trouve a ce jour sur les pages seed).
+- DOCX : implemente avec python-docx (ADR 0005, 17 juillet 2026). PAS ENCORE teste sur
+  un vrai fichier hcp.ma (ex. notes IPC/IPPI) — prochaine etape.
 """
 from __future__ import annotations
 
@@ -35,6 +40,8 @@ class Extracteur:
             return self._extraire_pdf(document.texte_brut)
         if document.type == "xlsx":
             return self._extraire_xlsx(document.texte_brut)
+        if document.type == "docx":
+            return self._extraire_docx(document.texte_brut)
         return self._extraire_html(document.texte_brut)
 
     @staticmethod
@@ -105,3 +112,24 @@ class Extracteur:
         # Un XLSX est de la donnee pure : pas de texte narratif a chunker, tout part
         # vers ConstructeurIndicateurs via les tableaux.
         return "", tableaux
+
+    @staticmethod
+    def _extraire_docx(chemin_fichier: str) -> tuple[str, list[Tableau]]:
+        # Import local : python-docx n'est necessaire que pour ce chemin de code.
+        # Alias DocxDocument pour ne pas entrer en collision avec notre propre
+        # classe Document (src/models.py).
+        from docx import Document as DocxDocument
+
+        docx = DocxDocument(chemin_fichier)
+
+        paragraphes = [p.text.strip() for p in docx.paragraphs]
+        texte_propre = "\n".join(p for p in paragraphes if p)
+
+        tableaux: list[Tableau] = []
+        for table in docx.tables:
+            lignes = [[cellule.text.strip() for cellule in ligne.cells] for ligne in table.rows]
+            lignes = [l for l in lignes if any(c for c in l)]
+            if lignes:
+                tableaux.append(lignes)
+
+        return texte_propre, tableaux

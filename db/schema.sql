@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS document (
     date_publication  TEXT,
     langue            TEXT NOT NULL DEFAULT 'fr',
     categorie         TEXT,
-    type              TEXT NOT NULL CHECK (type IN ('html', 'pdf', 'xlsx', 'api'))
+    type              TEXT NOT NULL CHECK (type IN ('html', 'pdf', 'xlsx', 'api', 'docx'))
 );
 
 CREATE TABLE IF NOT EXISTS chunk (
