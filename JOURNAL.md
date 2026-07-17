@@ -143,3 +143,12 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Corrige dans `structurer_depuis_bds` : chaque `.get(...)` a risque est suivi d'un
   `or []`/`or {}` pour absorber a la fois cle absente et valeur null. Ajoute un test de
   regression avec `dimensions: None`. Suite complete : 10/10 tests.
+
+## 17 juillet 2026 (suite 2) — pipeline BDS valide de bout en bout sur les 18 codes
+
+- Relance de `scripts/preremplir_indicateurs_bds.py` apres le fix dimensions=null :
+  18/18 codes recuperes avec succes, 0 echec, 35561 lignes d'indicateurs construites
+  au total (de 4 lignes pour I2790 "Taux d'urbanisation" a 24696 pour I3981 "Indice
+  des prix a la consommation", detaille par produit et par mois).
+- `ConstructeurIndicateurs` est donc valide en conditions reelles sur l'integralite
+  de la liste curee, pas seulement sur I3181. Item du backlog Sprint 2 confirme.
