@@ -13,7 +13,9 @@ façon que `scripts/preremplir_indicateurs_bds.py` le fait pour la source BDS.
 
 Usage prévu (à exécuter sur le PC, ce sandbox n'a pas d'accès réseau vers hcp.ma) :
 
-    python -m scripts.indexer_documents [chemin_db]
+    python -m scripts.indexer_documents                  # tout indexer
+    python -m scripts.indexer_documents --limite 3        # test rapide, 3 documents
+    python -m scripts.indexer_documents --db chemin.db    # base personnalisée
 
 Collecte via `data/listing_urls.py` (ADR 0006, `Scraper.collecter_depuis_listing`,
 `max_pages=1` — portée "fraîcheur" par défaut ; passer `max_pages=None` dans le code
@@ -21,7 +23,6 @@ pour une collecte historique complète) puis indexe chaque `Document` brut retou
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Optional
 
@@ -62,7 +63,7 @@ def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, docu
     }
 
 
-def main(chemin_db: Optional[Path] = None) -> None:
+def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> None:
     # Imports locaux : evite de charger Scraper/requests pour les tests qui n'utilisent
     # que `indexer_document` (celui-ci n'a besoin d'aucun acces reseau).
     from data.listing_urls import URLS_LISTING_PAR_CATEGORIE
@@ -79,10 +80,14 @@ def main(chemin_db: Optional[Path] = None) -> None:
     try:
         for categorie, listings in URLS_LISTING_PAR_CATEGORIE.items():
             for url_listing in listings:
+                if limite is not None and total_documents >= limite:
+                    break
                 documents = scraper.collecter_depuis_listing(
                     url_listing, categorie=categorie, max_pages=1
                 )
                 for document in documents:
+                    if limite is not None and total_documents >= limite:
+                        break
                     resume = indexer_document(conn, extracteur, indexeur, document)
                     total_documents += 1
                     total_chunks += resume["chunks"]
@@ -98,5 +103,13 @@ def main(chemin_db: Optional[Path] = None) -> None:
 
 
 if __name__ == "__main__":
-    chemin = Path(sys.argv[1]) if len(sys.argv) > 1 else None
-    main(chemin)
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db", type=Path, default=None, help="chemin de la base SQLite")
+    parser.add_argument(
+        "--limite", type=int, default=None,
+        help="arrete apres N documents traites (utile pour un premier test rapide)",
+    )
+    args = parser.parse_args()
+    main(chemin_db=args.db, limite=args.limite)
