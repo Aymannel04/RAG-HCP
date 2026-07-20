@@ -370,3 +370,61 @@ de stage en fin de période, pas besoin d'être exhaustif.
   `_filtrer_urls_arabe` ecarte ces pages par defaut (`self.inclure_arabe`, meme regle
   que pour les pieces jointes, hors scope V1). 2 nouveaux tests avec fixture
   reconstruite depuis le cas reel trouve. Suite complete : 24/24 tests passes.
+
+## 20 juillet 2026 — fin du Sprint 2 : indexation (chunking, embeddings, Chroma/BM25) + insertion en base
+
+- Objectif : terminer les 3 derniers items du backlog Sprint 2 (TODO.md) demande
+  par Ayman ("avancer le maximum" apres la reunion avec l'encadrante) : chunking +
+  embeddings, indexation Chroma + BM25, script d'insertion en base.
+- Releve prealable des decisions deja actees dans les docs de conception (fiche de
+  cadrage, dossier UML) pour rester coherent avec ce qui a ete livre a l'encadrante :
+  BGE-M3 + sentence-transformers, ChromaDB, rank_bm25 sont bien les choix ecrits
+  (ADR 0002) ; en revanche taille de chunk, chevauchement, formule de fusion
+  dense/BM25 et schema de metadonnees Chroma ne sont fixes nulle part -- ce sont
+  des decisions d'implementation prises et justifiees directement dans le code.
+- `src/indexeur_texte.py` : `IndexeurTexte.indexer(document, texte)` decoupe par
+  paragraphe (empaquetage glouton, ~1500 caracteres, chevauchement ~200), calcule un
+  embedding par chunk et les ajoute a une collection Chroma persistante
+  (`data/chroma/`, gitignore). `rechercher(question, top_k)` fait une recherche
+  hybride : requete Chroma (dense) + BM25 (rank_bm25, reconstruit a la demande car
+  pas de persistance native), fusion par Reciprocal Rank Fusion (RRF, k=60) plutot
+  qu'une moyenne ponderee -- les scores denses (cosinus, 0-1) et BM25 (non bornes)
+  ne sont pas sur la meme echelle, RRF s'appuie uniquement sur le rang et evite ce
+  probleme. La fonction d'embedding est injectable au constructeur : le vrai modele
+  BGE-M3 (~2 Go) n'est pas telechargeable dans ce sandbox sans acces reseau (meme
+  contrainte que pour hcp.ma), donc les tests (15, `tests/test_indexeur_texte.py`)
+  utilisent chromadb et rank_bm25 REELS (installes et verifies dans le sandbox) mais
+  une fonction d'embedding factice (vecteur binaire sur un petit vocabulaire),
+  suffisante pour verifier que la recherche hybride retrouve bien le bon document
+  parmi plusieurs sujets differents.
+- `src/base_donnees.py` (nouveau) : connexion SQLite + upsert `document`/`chunk`/
+  `indicateur`. Dedoublonnage des documents par `url` UNIQUE (deja en place, ADR
+  0001/0006). Pour les indicateurs, le schema n'a pas de contrainte UNIQUE -- ajoute
+  un upsert applicatif sur (nom, periode, region, code_bds) cote code : necessaire
+  car le pre-remplissage BDS (ADR 0004) est prevu pour tourner a repetition
+  (nocturne), et sans ca chaque execution dupliquerait toutes les lignes. Embedding
+  serialise en BLOB via le module standard `array` (float32), pas de dependance
+  supplementaire. 9 tests avec une vraie base SQLite temporaire (meme esprit que
+  tests/test_schema.py deja existant).
+- `scripts/preremplir_indicateurs_bds.py` mis a jour : fait maintenant le vrai
+  upsert en base (avant, le script affichait juste un resume sans jamais ecrire en
+  SQLite -- limite documentee explicitement dans son propre docstring depuis le
+  16 juillet).
+- `scripts/indexer_documents.py` (nouveau) : chaine Extracteur -> insertion
+  `document` -> `IndexeurTexte.indexer` -> insertion `chunk`. Les documents HTML
+  sont explicitement ignores (ADR 0003 : jamais indexes). Teste bout en bout avec
+  un vrai fichier .docx genere a la volee (python-docx, meme pattern que les tests
+  DOCX de l'ADR 0005) : extraction reelle, insertion SQLite reelle, indexation
+  Chroma/BM25 reelle (embedding factice), puis verification qu'une recherche
+  retrouve bien le chunk insere. 4 tests.
+- Limite assumee et documentee : `ConstructeurIndicateurs.structurer` (repli
+  PDF/XLSX pour les indicateurs hors catalogue BDS) reste un `NotImplementedError`
+  -- pas re-ouvert aujourd'hui, priorite plus basse depuis l'ADR 0004 (l'API BDS
+  couvre deja la majorite des indicateurs des 3 categories). `indexer_documents.py`
+  ne branche donc pas encore cette source.
+- Suite de tests complete : 52/52 (24 avant aujourd'hui + 15 IndexeurTexte + 9
+  base_donnees + 4 indexer_documents).
+- Sprint 2 (TODO.md) est maintenant fonctionnellement complet cote code. Reste a
+  valider en conditions reelles sur la machine d'Ayman : le vrai modele BGE-M3, et
+  un vrai lot de documents indexes de bout en bout (comme pour le DOCX et la
+  decouverte automatique, ce sandbox n'a pas d'acces reseau vers hcp.ma).

@@ -114,15 +114,40 @@ Backlog :
       téléchargements distincte donnant directement les liens de fichiers (pas de
       page HTML intermédiaire), avec titre/date/tags déjà fournis. Changement de fond
       potentiel, à évaluer dans un ADR séparé si besoin (voir JOURNAL.md, 20/07).
-- [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
-      `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
-- [ ] Indexation Chroma + BM25
-- [ ] Script d'insertion en base (`db/schema.sql`), adapté pour stocker les indicateurs
-      venant de la BDS (avec le code indicateur BDS comme référence) en plus de ceux
-      extraits de PDF/XLSX
+- [x] Chunking + embeddings + indexation Chroma + BM25 (`src/indexeur_texte.py`,
+      20/07/2026) : `IndexeurTexte.indexer(document, texte)` — découpe par paragraphe
+      avec empaquetage glouton (taille cible ~1500 caractères, chevauchement ~200 —
+      valeurs non fixées dans les docs de conception, choisies et justifiées en tête
+      de fichier), embeddings via `sentence-transformers`/BGE-M3 (ADR 0002),
+      indexation vectorielle Chroma persistante (`data/chroma/`, gitignoré) +
+      BM25 (`rank_bm25`, reconstruit à la demande). `rechercher(question, top_k)` :
+      recherche hybride dense + BM25, fusionnée par Reciprocal Rank Fusion (RRF,
+      k=60 — pas de formule de fusion imposée par les docs, RRF choisi car il évite
+      de normaliser deux échelles de score différentes). Fonction d'embedding
+      injectable au constructeur pour les tests (le vrai modèle BGE-M3, ~2 Go, n'est
+      pas téléchargeable dans le sandbox de dev sans accès réseau) : 15 tests avec
+      chromadb/rank_bm25 réels + embedding factice. **Reste à valider avec le vrai
+      modèle BGE-M3** sur la machine d'Ayman.
+- [x] Script d'insertion en base (20/07/2026) : `src/base_donnees.py` (connexion +
+      upsert `document`/`chunk`/`indicateur`, dédoublonnage par `url` UNIQUE pour les
+      documents, upsert applicatif sur (nom, periode, region, code_bds) pour les
+      indicateurs — le schéma n'a pas de contrainte UNIQUE dessus, nécessaire car le
+      pré-remplissage BDS tourne à répétition). Embedding sérialisé en BLOB via le
+      module standard `array` (float32). `scripts/preremplir_indicateurs_bds.py` fait
+      maintenant le vrai upsert (ne se contentait que d'un résumé affiché avant).
+      `scripts/indexer_documents.py` (nouveau) : Extracteur -> insertion `document` ->
+      `IndexeurTexte.indexer` -> insertion `chunk`, HTML explicitement ignoré (ADR
+      0003). 13 nouveaux tests (9 base_donnees + 4 indexer_documents), dont un bout en
+      bout réel sur un vrai .docx généré à la volée (python-docx). Suite complète :
+      52/52. **Reste hors périmètre** : `ConstructeurIndicateurs.structurer` (repli
+      PDF/XLSX pour les indicateurs, toujours `NotImplementedError` — priorité basse
+      depuis que l'API BDS couvre la majorité des indicateurs des 3 catégories, ADR
+      0004) n'est donc pas encore branché dans `indexer_documents.py`.
 
-**Definition of done :** les PDF/XLSX collectés en Sprint 1 sont indexés de bout en bout
-(texte + indicateurs) et interrogeables par script. Aucun contenu HTML n'est indexé.
+**Definition of done :** les PDF/XLSX/DOCX collectés sont indexés de bout en bout
+(texte + indicateurs BDS) et interrogeables par script. Aucun contenu HTML n'est
+indexé. **Sprint 2 fonctionnellement complet** côté code — reste la validation en
+conditions réelles (BGE-M3 + vrai lot de documents) sur la machine d'Ayman.
 
 ---
 

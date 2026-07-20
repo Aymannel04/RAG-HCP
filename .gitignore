@@ -20,6 +20,7 @@ venv/
 # Données locales (pas versionnées : trop volumineuses / regénérables)
 data/raw/
 data/processed/
+data/chroma/
 data/bds_catalogue.json
 *.sqlite3
 *.db
