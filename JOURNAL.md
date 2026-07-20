@@ -428,3 +428,19 @@ de stage en fin de période, pas besoin d'être exhaustif.
   valider en conditions reelles sur la machine d'Ayman : le vrai modele BGE-M3, et
   un vrai lot de documents indexes de bout en bout (comme pour le DOCX et la
   decouverte automatique, ce sandbox n'a pas d'acces reseau vers hcp.ma).
+- Question d'Ayman en repassant sur le code : la fonction d'embedding factice
+  (utilisee UNIQUEMENT dans les tests, jamais dans le pipeline reel) semait un doute
+  legitime sur ce qui est reellement teste vs simule. Clarifie explicitement : le
+  vrai chemin (`_embarquer`, chargement de BAAI/bge-m3 via sentence-transformers)
+  n'a jamais tourne pour de vrai dans ce sandbox (pas d'acces reseau pour telecharger
+  le modele, ~2 Go) -- seule la logique autour (chunking, Chroma, BM25, fusion,
+  insertion SQLite) a ete verifiee reellement, avec un embedding factice injecte a
+  la place du modele.
+- `scripts/inspecter_index.py` (nouveau) : script de demonstration/verification,
+  affiche un resume lisible de la base (nombre de documents/chunks/indicateurs,
+  extraits de chunks avec dimension d'embedding, exemples d'indicateurs) + option
+  `--recherche "question"` pour lancer une vraie recherche hybride (avec le vrai
+  modele BGE-M3 cette fois). Pense pour montrer un resultat concret a l'encadrante
+  une fois que `scripts/indexer_documents.py` aura tourne en reel. Verifie
+  manuellement (base peuplee via fixture + base vide) : les deux cas s'affichent
+  correctement.
