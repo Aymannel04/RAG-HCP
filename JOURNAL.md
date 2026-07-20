@@ -236,3 +236,27 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Limite assumee, explicitement notee dans l'ADR 0005 : tout ceci est valide contre
   des fixtures generees synthetiquement par python-docx, PAS contre un vrai fichier
   IPC/IPPI telecharge depuis hcp.ma. C'est la prochaine etape.
+
+## 20 juillet 2026 — note de reponse a l'encadrante (stockage, Redis, routeur, benchmark)
+
+- Reunion avec l'encadrante le 17 juillet : questions sur le stockage post-collecte
+  (chunks vs indicateurs, limites), l'interet de Redis, pourquoi diviser la base, et
+  comment le Routeur distingue une question chiffree d'une question narrative (et gere
+  le cas des deux a la fois). Redige `docs/note_stockage_routage_benchmark.pdf` (LaTeX,
+  style maison) en reponse.
+- Point de conception identifie en re-analysant la question du "cas mixte" : le modele
+  actuel de `routeur.py` (Enum CHIFFRE/NOTION, choix unique) ne gere pas correctement
+  une question qui a les deux composantes. Revision proposee dans la note : deux
+  signaux booleens independants (chiffre / narratif) pouvant etre vrais simultanement,
+  avec dispatch parallele vers LookupStructure et RetrievalReranker si les deux sont
+  positifs. A formaliser en ADR au debut de l'implementation du Routeur (semaine 3).
+- Proposition Redis documentee comme couche de cache devant SQLite (pas en
+  remplacement), branchee sur la strategie cache-aside deja actee en ADR 0004 -
+  a documenter formellement en ADR 0006 si retenue.
+- Benchmarking demande par l'encadrante sur les choix de l'ADR 0002 : scraping
+  (requests+BeautifulSoup vs Scrapy vs Playwright), extraction PDF (pdfplumber vs
+  PyMuPDF vs Camelot), embeddings (BGE-M3 vs OpenAI text-embedding-3-large vs
+  multilingual-e5-large), index vectoriel (ChromaDB vs FAISS vs Qdrant vs pgvector),
+  recherche lexicale (rank-bm25 vs BM25S vs Elasticsearch/OpenSearch), base indicateurs
+  (SQLite vs PostgreSQL vs DuckDB), interface (Streamlit vs Gradio) - avec pour chaque
+  brique un chemin de montee en charge si deploiement reel au-dela du prototype.
