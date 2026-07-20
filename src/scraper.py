@@ -55,6 +55,19 @@ INDICES_HREF_TELECHARGEMENT = ("/attachment/", "/file/")
 INDICES_ARABE = ("_ar.", "_ar)", "(ar)", " ar)", "version ar", "arabe")
 INDICES_FRANCAIS = ("_fr.", "_fr)", "(fr)", " fr)", "version fr", "francais", "français")
 
+# Motif d'URL des pages article sur hcp.ma (ex. ".../Situation-economique-nationale...
+# _a4325.html"), stable et observe sur des dizaines de pages depuis le 15 juillet 2026 —
+# sert a distinguer un lien d'article d'un lien de menu/navigation sur une page listing
+# (voir ADR 0006, docs/adr/0006-decouverte-automatique-publications.md).
+PATTERN_URL_ARTICLE = re.compile(r"_a\d+\.html$")
+
+# Parametre de pagination observe sur les pages listing (ex.
+# "?start=5&show=&order="). Le pas entre deux pages (5 dans les cas verifies le 20
+# juillet 2026) n'est pas code en dur : il est deduit des liens de pagination presents
+# sur la page elle-meme (voir _increments_pagination), pour rester robuste si hcp.ma
+# change ce nombre.
+PATTERN_PARAM_START = re.compile(r"[?&]start=(\d+)")
+
 
 class Scraper:
     """Collecte les pages et pieces jointes (PDF/XLSX/DOCX) des categories ciblees de hcp.ma."""
@@ -87,6 +100,110 @@ class Scraper:
                 print(f"[Scraper] echec sur {url} : {e}")
             time.sleep(self.delay)
         return documents
+
+    def collecter_depuis_listing(
+        self, url_listing: str, categorie: str = "", max_pages: Optional[int] = None
+    ) -> list[Document]:
+        """Decouvre les URLs d'articles sur une page listing (ex.
+        "Publications-Marche-du-travail_r425.html") puis les collecte via `collecter()`
+        (voir ADR 0006, docs/adr/0006-decouverte-automatique-publications.md).
+
+        `max_pages` controle la portee de la decouverte :
+        - `max_pages=1` : seulement la 1ere page (les publications les plus recentes,
+          triees par hcp.ma du plus recent au plus ancien) — usage "fraicheur", pense
+          pour une execution reguliere qui detecte les nouvelles publications.
+        - `max_pages=None` : toutes les pages du listing — usage "historique", pense
+          pour une execution ponctuelle qui elargit la couverture du corpus.
+
+        La deduplication des documents deja connus n'est pas geree ici : elle repose
+        sur la contrainte `document.url UNIQUE` de `db/schema.sql` au moment de
+        l'insertion en base (voir ADR 0006).
+        """
+        urls = self.decouvrir_urls_liste(url_listing, max_pages=max_pages)
+        return self.collecter(urls, categorie=categorie)
+
+    def decouvrir_urls_liste(self, url_listing: str, max_pages: Optional[int] = None) -> list[str]:
+        """Parcourt une page listing paginee de hcp.ma et retourne les URLs d'articles
+        trouvees (voir ADR 0006).
+
+        Recupere d'abord la page 1, en extrait les URLs d'articles et les paliers de
+        pagination (`?start=N`) presents sur la page. Si `max_pages` limite le nombre
+        de pages a parcourir (ex. `max_pages=1` pour ne lire que la page 1), les paliers
+        au-dela sont ignores. S'arrete tot si une page ne remonte aucune nouvelle URL
+        d'article (page vide ou fin du listing atteinte).
+        """
+        resp = requests.get(url_listing, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        urls_trouvees: list[str] = []
+        vues = set()
+        for url in self._extraire_urls_articles(soup, url_listing):
+            if url not in vues:
+                vues.add(url)
+                urls_trouvees.append(url)
+
+        paliers = self._increments_pagination(soup)
+        if max_pages is not None:
+            paliers = paliers[: max(0, max_pages - 1)]
+
+        for palier in paliers:
+            url_page = f"{url_listing}?start={palier}&show=&order="
+            time.sleep(self.delay)
+            try:
+                resp = requests.get(url_page, headers=HEADERS, timeout=15)
+                resp.raise_for_status()
+            except requests.RequestException as e:
+                print(f"[Scraper] echec page listing {url_page} : {e}")
+                continue
+            soup_page = BeautifulSoup(resp.text, "lxml")
+            nouvelles = [
+                u for u in self._extraire_urls_articles(soup_page, url_listing) if u not in vues
+            ]
+            if not nouvelles:
+                break  # fin du listing atteinte (ou page vide) : inutile de continuer
+            for url in nouvelles:
+                vues.add(url)
+                urls_trouvees.append(url)
+
+        return urls_trouvees
+
+    @staticmethod
+    def _extraire_urls_articles(soup: BeautifulSoup, url_page: str) -> list[str]:
+        """Repere les liens d'articles sur une page listing.
+
+        Deux filtres combines, pas un seul (voir ADR 0006) :
+        1. Le lien doit etre dans un titre (`<h2>`-`<h5>`) : sur les pages listing
+           reelles verifiees (ex. Publications-Marche-du-travail_r425.html), chaque
+           article apparait sous la forme "### [titre](url) - date" — le titre est
+           dans un titre de section, contrairement aux liens de menu/pied de page.
+        2. L'URL doit suivre le motif stable des pages article de hcp.ma
+           (`PATTERN_URL_ARTICLE`, ex. "..._a4325.html").
+        Le filtre 1 seul aurait suffi a eliminer le faux positif trouve en test
+        (menu "Tout sur HCP" -> Qui-sommes-nous_a3079.html, hors titre mais dont l'URL
+        suit quand meme le motif _aXXX.html) ; les deux filtres combines sont plus
+        robustes qu'un seul en cas de gabarit de page legerement different.
+        """
+        urls: list[str] = []
+        for titre in soup.find_all(["h2", "h3", "h4", "h5"]):
+            for a in titre.find_all("a", href=True):
+                url_absolue = urljoin(url_page, a["href"].split("?")[0])
+                if PATTERN_URL_ARTICLE.search(url_absolue) and url_absolue not in urls:
+                    urls.append(url_absolue)
+        return urls
+
+    @staticmethod
+    def _increments_pagination(soup: BeautifulSoup) -> list[int]:
+        """Deduit les paliers de pagination (`?start=N`) presents sur une page listing,
+        tries par ordre croissant. Le pas entre deux pages n'est pas suppose fixe :
+        chaque palier est lu directement dans les liens de pagination reels (voir
+        ADR 0006)."""
+        paliers = set()
+        for a in soup.find_all("a", href=True):
+            m = PATTERN_PARAM_START.search(a["href"])
+            if m:
+                paliers.add(int(m.group(1)))
+        return sorted(p for p in paliers if p > 0)
 
     def _recuperer_page_et_pieces(self, url: str, categorie: str) -> list[Document]:
         resp = requests.get(url, headers=HEADERS, timeout=15)

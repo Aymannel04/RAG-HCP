@@ -154,3 +154,126 @@ def test_contenu_semble_valide_distingue_xlsx_et_docx():
 def test_nom_fichier_piece_gere_extension_docx():
     nom = Scraper._nom_fichier_piece("https://www.hcp.ma/attachment/2885946/", "docx")
     assert nom == "2885946.docx"
+
+
+# --- ADR 0006 : decouverte automatique des publications -----------------------------
+#
+# Verifie le 20 juillet 2026 en reel sur https://www.hcp.ma/Publications-Marche-du-travail_r425.html
+# (50 publications, 10 pages de 5, pagination ?start=0..45). Fixtures reconstruites a
+# partir de cette page reelle et du menu HCP_TYPE deja utilise plus haut (regression :
+# le menu ne doit produire aucun faux positif sur le motif d'URL d'article).
+
+PAGE_LISTING_TYPE = (
+    MENU_HCP_TYPE
+    + '<h3><a href="https://www.hcp.ma/Informalite-genre-et-vieillissement-inegalites-'
+    'cumulatives-et-effets-intergenerationnels-Mai-2026_a4311.html">Informalite...</a></h3>'
+    + '<a href="https://www.hcp.ma/Informalite-genre-et-vieillissement-inegalites-'
+    'cumulatives-et-effets-intergenerationnels-Mai-2026_a4311.html">Lire la suite</a>'
+    + '<h3><a href="https://www.hcp.ma/Activite-emploi-et-chomage-resultats-annuels-2025_a4310.html">'
+    "Activite...</a></h3>"
+    + '<a href="https://www.hcp.ma/Activite-emploi-et-chomage-resultats-annuels-2025_a4310.html">'
+    "Lire la suite</a>"
+    + '<div class="pagination">'
+    '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html">1</a>'
+    '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html?start=5&show=&order=">2</a>'
+    '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html?start=10&show=&order=">3</a>'
+    '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html?start=45&show=&order=">10</a>'
+    "</div>"
+)
+
+
+def test_extraire_urls_articles_pas_de_faux_positif_sur_menu_reel():
+    # Meme regression que _detecter_pieces_jointes : le menu HCP (categories, pied de
+    # page, reseaux sociaux...) ne doit jamais etre pris pour un article, y compris les
+    # liens en _rXXX.html (categories) qui pourraient sembler proches du motif _aXXX.html.
+    soup = BeautifulSoup(MENU_HCP_TYPE, "lxml")
+    urls = Scraper._extraire_urls_articles(soup, "https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
+    assert urls == []
+
+
+def test_extraire_urls_articles_deduplique_lien_titre_et_lire_la_suite():
+    soup = BeautifulSoup(PAGE_LISTING_TYPE, "lxml")
+    urls = Scraper._extraire_urls_articles(soup, "https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
+    assert urls == [
+        "https://www.hcp.ma/Informalite-genre-et-vieillissement-inegalites-cumulatives-et-effets-intergenerationnels-Mai-2026_a4311.html",
+        "https://www.hcp.ma/Activite-emploi-et-chomage-resultats-annuels-2025_a4310.html",
+    ]
+
+
+def test_increments_pagination_deduits_des_liens_reels():
+    soup = BeautifulSoup(PAGE_LISTING_TYPE, "lxml")
+    assert Scraper._increments_pagination(soup) == [5, 10, 45]
+
+
+@patch("src.scraper.requests.get")
+def test_decouvrir_urls_liste_suit_la_pagination(mock_get):
+    # Page 1 : 1 article + paliers [5, 10]. Page ?start=5 : 1 nouvel article, pas de
+    # pagination (fin du listing). max_pages=None -> doit suivre jusqu'au bout.
+    page_1 = MagicMock()
+    page_1.text = (
+        MENU_HCP_TYPE
+        + '<h3><a href="https://www.hcp.ma/Article-un_a1111.html">Un</a></h3>'
+        + '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html?start=5&show=&order=">2</a>'
+    )
+    page_1.raise_for_status = MagicMock()
+
+    page_2 = MagicMock()
+    page_2.text = MENU_HCP_TYPE + '<h3><a href="https://www.hcp.ma/Article-deux_a2222.html">Deux</a></h3>'
+    page_2.raise_for_status = MagicMock()
+
+    mock_get.side_effect = [page_1, page_2]
+
+    scraper = Scraper(delay=0)
+    urls = scraper.decouvrir_urls_liste("https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
+
+    assert urls == [
+        "https://www.hcp.ma/Article-un_a1111.html",
+        "https://www.hcp.ma/Article-deux_a2222.html",
+    ]
+    assert mock_get.call_count == 2
+
+
+@patch("src.scraper.requests.get")
+def test_decouvrir_urls_liste_max_pages_1_ne_suit_pas_la_pagination(mock_get):
+    # Usage "fraicheur" (ADR 0006) : max_pages=1 ne doit lire que la page 1, meme si
+    # elle annonce d'autres pages.
+    page_1 = MagicMock()
+    page_1.text = (
+        MENU_HCP_TYPE
+        + '<h3><a href="https://www.hcp.ma/Article-un_a1111.html">Un</a></h3>'
+        + '<a href="https://www.hcp.ma/Publications-Marche-du-travail_r425.html?start=5&show=&order=">2</a>'
+    )
+    page_1.raise_for_status = MagicMock()
+    mock_get.return_value = page_1
+
+    scraper = Scraper(delay=0)
+    urls = scraper.decouvrir_urls_liste(
+        "https://www.hcp.ma/Publications-Marche-du-travail_r425.html", max_pages=1
+    )
+
+    assert urls == ["https://www.hcp.ma/Article-un_a1111.html"]
+    assert mock_get.call_count == 1
+
+
+@patch("src.scraper.requests.get")
+def test_collecter_depuis_listing_enchaine_decouverte_et_collecter(mock_get):
+    page_listing = MagicMock()
+    page_listing.text = MENU_HCP_TYPE + '<h3><a href="https://www.hcp.ma/Article-un_a1111.html">Un</a></h3>'
+    page_listing.raise_for_status = MagicMock()
+
+    page_article = MagicMock()
+    page_article.text = "<html><body><h1>Article un</h1></body></html>"
+    page_article.raise_for_status = MagicMock()
+
+    mock_get.side_effect = [page_listing, page_article]
+
+    scraper = Scraper(delay=0, telecharger_pieces_jointes=False)
+    docs = scraper.collecter_depuis_listing(
+        "https://www.hcp.ma/Publications-Marche-du-travail_r425.html",
+        categorie="Marche du travail",
+        max_pages=1,
+    )
+
+    assert len(docs) == 1
+    assert docs[0].titre == "Article un"
+    assert docs[0].categorie == "Marche du travail"

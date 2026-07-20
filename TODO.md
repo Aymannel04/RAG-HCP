@@ -86,6 +86,24 @@ Backlog :
       à jour (`type` accepte `'docx'`). 6 nouveaux tests (détection, validation
       xlsx/docx, extraction avec fixture générée à la volée). Suite complète : 16/16.
       **Reste à valider en conditions réelles** sur un vrai .docx IPC/IPPI téléchargé.
+- [x] Découverte automatique des publications (ADR 0006, décidé avec Ayman le 20/07
+      après la réunion avec l'encadrante — la liste fixe de 27 URLs ne couvrait ni
+      l'historique ni les nouvelles publications) : `Scraper.decouvrir_urls_liste`/
+      `collecter_depuis_listing` parcourent les pages listing paginées de hcp.ma
+      (`?start=N`, palier déduit dynamiquement des liens de pagination réels, pas codé
+      en dur) et en extraient les URLs d'articles (filtre double : lien dans un titre
+      `<h3>` + motif d'URL `..._aXXX.html`, affiné après un faux positif trouvé en test
+      sur le lien de menu "Tout sur HCP"). `data/listing_urls.py` (config des pages
+      listing par catégorie — Marché du travail confirmée en réel, 50 publications/10
+      pages ; Économie/Population encore partielles, sous-thèmes à inventorier).
+      `scripts/decouverte_publications.py` (mode `historique` = tout le listing, mode
+      `quotidien` = 1ère page seulement, même patron que le pré-remplissage BDS
+      nocturne). Dédoublonnage géré par la contrainte `document.url UNIQUE` existante,
+      aucun changement de schéma. 8 nouveaux tests, suite complète : 22/22.
+      **Reste à valider en conditions réelles** (exécuter
+      `scripts/decouverte_publications.py` sur la machine d'Ayman, pas d'accès réseau
+      hcp.ma dans ce sandbox) + compléter l'inventaire des pages listing pour Économie
+      et Population & démographie.
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25

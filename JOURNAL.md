@@ -260,3 +260,53 @@ de stage en fin de période, pas besoin d'être exhaustif.
   recherche lexicale (rank-bm25 vs BM25S vs Elasticsearch/OpenSearch), base indicateurs
   (SQLite vs PostgreSQL vs DuckDB), interface (Streamlit vs Gradio) - avec pour chaque
   brique un chemin de montee en charge si deploiement reel au-dela du prototype.
+- Note de correction sur la numerotation : la note ci-dessus evoquait "ADR 0006" pour
+  Redis si la proposition est retenue. Ce numero a finalement ete pris par la decision
+  ci-dessous (decouverte automatique des publications), traitee en premier suite a la
+  demande explicite d'Ayman. La formalisation de Redis en ADR, si elle a lieu, portera
+  donc le numero 0007.
+
+## 20 juillet 2026 — decouverte automatique des publications (ADR 0006)
+
+- Point souleve par Ayman apres la note ci-dessus : les 27 URLs de `data/seed_urls.py`
+  n'etaient qu'un echantillon de depart (Sprint 1). Deux trous restaient non traites :
+  (1) aucune couverture de l'historique des publications hcp.ma (des annees de
+  documents), (2) aucune detection des nouvelles publications au fil du temps.
+- Verification en reel sur hcp.ma (seul `web_fetch` a un vrai acces reseau dans ce
+  sandbox, `bash`/`curl` restent bloques par l'allowlist du proxy) : les pages
+  "vitrine" par categorie (Economie_r327, Marche-du-travail_r423,
+  Population-demographie_r513) n'affichent qu'une dizaine d'actualites/publications
+  recentes - PAS un archive complet. En revanche, des pages listing dediees existent,
+  avec une vraie pagination :
+  `https://www.hcp.ma/Publications-Marche-du-travail_r425.html` -> 50 publications
+  reparties sur 10 pages de 5 (`?start=0` a `?start=45`) ; meme mecanisme verifie sur
+  `Etudes-economiques_r650.html` (25 publications, 5 pages). Volume par listing modeste
+  (dizaines a centaines), donc un crawl complet est realiste.
+- Decision actee dans `docs/adr/0006-decouverte-automatique-publications.md` : un seul
+  mecanisme de decouverte (parcourir un listing paginee, en extraire les URLs
+  d'articles), utilise a deux portees - `max_pages=None` pour une collecte historique
+  ponctuelle, `max_pages=1` pour une collecte de fraicheur reguliere (les listings sont
+  tries du plus recent au plus ancien, donc toute nouveaute apparait en page 1). Aucun
+  changement de schema necessaire : la contrainte `document.url UNIQUE` deja en place
+  (ADR 0001) suffit a dedupliquer.
+- Implemente dans `src/scraper.py` : `_extraire_urls_articles` (filtre double - lien
+  dans un titre `<h2>-<h5>` + motif d'URL `..._aXXX.html`), `_increments_pagination`
+  (paliers `?start=N` deduits des vrais liens de pagination, pas code en dur),
+  `decouvrir_urls_liste` et `collecter_depuis_listing`. Premiere version du filtre
+  (motif d'URL seul) laissait passer un faux positif reel trouve en ecrivant les
+  tests : le lien de menu "Tout sur HCP" pointe vers `Qui-sommes-nous_a3079.html`, qui
+  suit le meme motif `_aXXX.html` qu'un vrai article - corrige en exigeant en plus que
+  le lien soit dans un titre de section, conforme au gabarit reel des pages listing
+  (`### [titre](url) - date`).
+- Nouveaux fichiers : `data/listing_urls.py` (pages listing par categorie - Marche du
+  travail confirmee en reel, Economie/Population encore partielles, sous-themes a
+  inventorier) et `scripts/decouverte_publications.py` (modes `historique`/`quotidien`,
+  meme style que `scripts/preremplir_indicateurs_bds.py`).
+- 8 nouveaux tests dans `tests/test_scraper.py` (dont la regression sur le faux positif
+  "Qui-sommes-nous"), avec mocks reconstruits depuis le vrai HTML observe. Suite
+  complete : 22/22 tests passes.
+- Limite explicitement non traitee (documentee dans l'ADR) : un document deja connu
+  peut etre revise a la meme URL - la dedup par URL ne le detecte pas. Necessiterait
+  une comparaison de hash de contenu, hors perimetre de cet ADR.
+- Comme pour le DOCX (ADR 0005), reste a valider en conditions reelles sur la machine
+  d'Ayman (`scripts/decouverte_publications.py`), pas d'acces reseau hcp.ma ici.
