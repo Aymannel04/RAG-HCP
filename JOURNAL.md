@@ -311,6 +311,44 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Comme pour le DOCX (ADR 0005), reste a valider en conditions reelles sur la machine
   d'Ayman (`scripts/decouverte_publications.py`), pas d'acces reseau hcp.ma ici.
 
+## 20 juillet 2026 — inventaire des pages listing (Economie, Population) + piste /downloads/
+
+- Complete l'inventaire de `data/listing_urls.py` en parcourant en reel les pages de
+  rubrique de hcp.ma (breadcrumb "Publications" de chaque sous-theme). Resultat :
+  Population & demographie 10/10 sous-themes trouves (Recensement, Structure de la
+  population, Naissances et fecondite, Mortalite, Couples et familles, Vieillissement,
+  Immigration, Genre, Education et formation, Sante) ; Economie 3 sous-themes confirmes
+  (Comptes nationaux, Conjoncture et prevision economique, Conjoncture entreprise) + la
+  page "Etudes economiques" deja connue, mais incomplet ("Indices des prix et
+  production" est lui-meme un regroupement de 4 sous-sous-themes - IPC, IPPI, IPI, ICE -
+  sans page Publications a lui ; "Secteurs d'activite" et "Sphere informelle" pas
+  verifies). Constat important : contrairement a Marche du travail (une seule page
+  agregee pour toute la categorie), Economie et Population n'ont PAS de page
+  "Publications-<categorie>" globale (verifie pour Population : la page existe -
+  Publications-Population-demographie_r515.html - mais est vide) ; chaque sous-theme a
+  sa propre page, il faut TOUTES les donner au Scraper.
+- Piste alternative decouverte en cherchant cet inventaire, volontairement pas
+  exploitee tout de suite : `hcp.ma/downloads/?tag=<categorie>` est une base de
+  telechargements distincte de tout ce qui precede. Trouvee via `robots.txt` ->
+  `news-sitemap.xml` (sitemap Google News, ne contient que les publications des
+  dernieres 48h - piste interessante pour la fraicheur) et le "Plan du site"
+  (`Plan-du-site_r670.html`), qui liste tous les tags de telechargement possibles,
+  alignes sur les categories/sous-themes du site. Verification en reel de
+  `?tag=Dernieres+parutions` : chaque entree donne directement le lien du fichier
+  (`hcp.ma/file/<id>/`, PAS une page HTML article intermediaire), avec titre, date de
+  publication et TOUS ses tags (categorie + sous-theme + type de publication) deja
+  fournis - potentiellement plus simple et plus riche que l'approche actuelle
+  (Scraper visite une page HTML puis cherche une piece jointe dessus). Egalement
+  organisee en "collections" avec compteur de fichiers (ex. "Voir tous les fichiers
+  (25)"). Pas encore verifiee en profondeur (pagination, couverture reelle) : c'est un
+  changement de fond du mecanisme de decouverte, pas juste un complement d'inventaire,
+  donc volontairement laisse de cote pour l'instant plutot que de re-ouvrir l'ADR 0006
+  a chaud. A soumettre a Ayman comme piste pour un ADR ulterieur si le mecanisme actuel
+  montre ses limites.
+- `data/listing_urls.py` mis a jour (Economie 4 URLs, Marche du travail 1, Population
+  10 = 15 pages listing au total), commentaires a jour sur ce qui reste ouvert. Suite
+  de tests inchangee (24/24, ce fichier n'a pas de tests dedies).
+
 ## 20 juillet 2026 — validation reelle de la decouverte + filtre arabe
 
 - Ayman a execute `python -m scripts.decouverte_publications quotidien` sur sa

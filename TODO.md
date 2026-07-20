@@ -106,10 +106,14 @@ Backlog :
       la découverte automatique (n'arrivait jamais avec l'ancienne liste choisie à la
       main). Corrigé : `_extraire_urls_articles` détecte la langue de chaque lien
       (même heuristique que pour les pièces jointes) et les pages arabes sont
-      écartées par défaut. Reste à compléter l'inventaire des pages listing pour
-      Économie (au-delà de "Etudes économiques") et Population & démographie (aucune
-      page listing agrégée trouvée pour l'instant, à vérifier sous-thème par
-      sous-thème).
+      écartées par défaut. Inventaire complété le 20/07 : Population & démographie
+      10/10 sous-thèmes trouvés (`data/listing_urls.py`) ; Économie 3 sous-thèmes
+      confirmés + Études économiques, encore partiel (Indices des prix et production,
+      Secteurs d'activité, Sphère informelle restants). Piste alternative repérée
+      mais non exploitée : `hcp.ma/downloads/?tag=<catégorie>` — base de
+      téléchargements distincte donnant directement les liens de fichiers (pas de
+      page HTML intermédiaire), avec titre/date/tags déjà fournis. Changement de fond
+      potentiel, à évaluer dans un ADR séparé si besoin (voir JOURNAL.md, 20/07).
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25
