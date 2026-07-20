@@ -146,8 +146,16 @@ Backlog :
 
 **Definition of done :** les PDF/XLSX/DOCX collectés sont indexés de bout en bout
 (texte + indicateurs BDS) et interrogeables par script. Aucun contenu HTML n'est
-indexé. **Sprint 2 fonctionnellement complet** côté code — reste la validation en
-conditions réelles (BGE-M3 + vrai lot de documents) sur la machine d'Ayman.
+indexé. **Sprint 2 fonctionnellement complet** côté code.
+
+**Validé en conditions réelles le 20/07** : premier run réel sur la machine
+d'Ayman (`python -m scripts.indexer_documents --limite 3`) — vrai téléchargement
+BGE-M3, 1 PDF réel extrait/chunké/indexé (40 chunks), pages HTML et pièces
+jointes arabes correctement écartées. Recherche hybride vérifiée via
+`scripts/inspecter_index.py --recherche "produit intérieur brut"` : embeddings
+dimension 1024 (confirme le vrai modèle), 5/5 résultats pertinents. **Reste** :
+un run plus large pour valider aussi un vrai .docx (IPC/IPPI) — voir tâche DOCX
+ci-dessus.
 
 ---
 

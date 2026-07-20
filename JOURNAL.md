@@ -444,3 +444,27 @@ de stage en fin de période, pas besoin d'être exhaustif.
   une fois que `scripts/indexer_documents.py` aura tourne en reel. Verifie
   manuellement (base peuplee via fixture + base vide) : les deux cas s'affichent
   correctement.
+
+## 20 juillet 2026 — premier test reel de bout en bout du pipeline complet
+
+- Ajoute `--limite N` a `scripts/indexer_documents.py` pour permettre un test rapide
+  sur quelques documents avant un run complet (le premier lancement telecharge
+  BGE-M3, ~2 Go, potentiellement long).
+- Ayman a lance `python -m scripts.indexer_documents --limite 3` sur sa machine :
+  premiere execution reelle du pipeline complet (reseau hcp.ma + telechargement et
+  inference BGE-M3 + Chroma + BM25 + SQLite), jusque-la jamais possible dans ce
+  sandbox (pas d'acces reseau).
+- Resultat conforme a l'attendu : 2 pages HTML ignorees (ADR 0003), 2 pieces
+  jointes en arabe ecartees par le filtre de langue (comportement voulu), 1 PDF
+  reel ("Les comptes regionaux...") extrait, decoupe et indexe -- 40 chunks.
+- Verification via `scripts/inspecter_index.py --recherche "produit interieur
+  brut"` : embeddings de dimension 1024 (signature BGE-M3, confirme que le vrai
+  modele a tourne, pas un stub), et les 5 resultats retournes sont tous
+  effectivement pertinents sur le PIB regional, bien classes.
+- Premiere preuve concrete en conditions reelles que toute la chaine Sprint 2
+  (scraping -> extraction -> chunking -> embeddings BGE-M3 -> indexation
+  Chroma/BM25 -> recherche hybride -> persistance SQLite) fonctionne de bout en
+  bout, pas seulement en tests avec des composants factices.
+- Reste a faire : lancer un run plus large (sans `--limite`, ou avec une limite
+  plus haute) pour couvrir aussi un vrai document DOCX (note IPC/IPPI) et valider
+  ADR 0005 en conditions reelles (tache #24, toujours en cours).
