@@ -138,7 +138,7 @@ class Scraper:
 
         urls_trouvees: list[str] = []
         vues = set()
-        for url in self._extraire_urls_articles(soup, url_listing):
+        for url in self._filtrer_urls_arabe(self._extraire_urls_articles(soup, url_listing)):
             if url not in vues:
                 vues.add(url)
                 urls_trouvees.append(url)
@@ -158,7 +158,9 @@ class Scraper:
                 continue
             soup_page = BeautifulSoup(resp.text, "lxml")
             nouvelles = [
-                u for u in self._extraire_urls_articles(soup_page, url_listing) if u not in vues
+                u
+                for u in self._filtrer_urls_arabe(self._extraire_urls_articles(soup_page, url_listing))
+                if u not in vues
             ]
             if not nouvelles:
                 break  # fin du listing atteinte (ou page vide) : inutile de continuer
@@ -168,9 +170,31 @@ class Scraper:
 
         return urls_trouvees
 
+    def _filtrer_urls_arabe(self, urls_avec_langue: list[tuple[str, str]]) -> list[str]:
+        """Ecarte les URLs d'articles detectees comme etant en arabe, sauf si
+        `self.inclure_arabe` (meme regle que pour les pieces jointes, voir
+        `collecter`/`_recuperer_page_et_pieces` — hors scope V1, fiche de cadrage
+        section 11).
+
+        Ajoute suite a un vrai cas trouve en conditions reelles le 20 juillet 2026 :
+        avec la liste fixe d'URLs (Sprint 1), ce cas n'arrivait jamais car les pages
+        etaient choisies a la main en francais. La decouverte automatique (ADR 0006)
+        remonte, elle, aussi les pages listing dans leur ordre reel — dont des versions
+        arabes de certains articles (ex. "...-version-Ar_a4217.html", titre de lien
+        "(version Ar)"), qui doivent etre ecartees comme n'importe quelle piece jointe
+        arabe.
+        """
+        urls: list[str] = []
+        for url, langue in urls_avec_langue:
+            if langue == "ar" and not self.inclure_arabe:
+                print(f"[Scraper] page article arabe ignoree (hors scope V1) : {url}")
+                continue
+            urls.append(url)
+        return urls
+
     @staticmethod
-    def _extraire_urls_articles(soup: BeautifulSoup, url_page: str) -> list[str]:
-        """Repere les liens d'articles sur une page listing.
+    def _extraire_urls_articles(soup: BeautifulSoup, url_page: str) -> list[tuple[str, str]]:
+        """Repere les liens d'articles sur une page listing, avec leur langue detectee.
 
         Deux filtres combines, pas un seul (voir ADR 0006) :
         1. Le lien doit etre dans un titre (`<h2>`-`<h5>`) : sur les pages listing
@@ -183,14 +207,26 @@ class Scraper:
         (menu "Tout sur HCP" -> Qui-sommes-nous_a3079.html, hors titre mais dont l'URL
         suit quand meme le motif _aXXX.html) ; les deux filtres combines sont plus
         robustes qu'un seul en cas de gabarit de page legerement different.
+
+        La langue est detectee via `_detecter_langue` (meme heuristique que pour les
+        pieces jointes), sur un signal combinant l'URL et le texte du lien — ex.
+        "(version Ar)" dans le texte suffit a detecter l'arabe meme quand l'URL seule
+        ne le signale pas clairement.
         """
-        urls: list[str] = []
+        resultats: list[tuple[str, str]] = []
+        vues = set()
         for titre in soup.find_all(["h2", "h3", "h4", "h5"]):
             for a in titre.find_all("a", href=True):
                 url_absolue = urljoin(url_page, a["href"].split("?")[0])
-                if PATTERN_URL_ARTICLE.search(url_absolue) and url_absolue not in urls:
-                    urls.append(url_absolue)
-        return urls
+                if not PATTERN_URL_ARTICLE.search(url_absolue) or url_absolue in vues:
+                    continue
+                texte = a.get_text(" ", strip=True).lower()
+                titre_attr = (a.get("title") or "").lower()
+                signal = " ".join([url_absolue.lower(), texte, titre_attr])
+                langue = Scraper._detecter_langue(signal)
+                vues.add(url_absolue)
+                resultats.append((url_absolue, langue))
+        return resultats
 
     @staticmethod
     def _increments_pagination(soup: BeautifulSoup) -> list[int]:

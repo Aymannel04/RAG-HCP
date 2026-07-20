@@ -99,11 +99,17 @@ Backlog :
       `scripts/decouverte_publications.py` (mode `historique` = tout le listing, mode
       `quotidien` = 1ère page seulement, même patron que le pré-remplissage BDS
       nocturne). Dédoublonnage géré par la contrainte `document.url UNIQUE` existante,
-      aucun changement de schéma. 8 nouveaux tests, suite complète : 22/22.
-      **Reste à valider en conditions réelles** (exécuter
-      `scripts/decouverte_publications.py` sur la machine d'Ayman, pas d'accès réseau
-      hcp.ma dans ce sandbox) + compléter l'inventaire des pages listing pour Économie
-      et Population & démographie.
+      aucun changement de schéma. Suite complète : 24/24.
+      **Validé en conditions réelles le 20/07** : 10 URLs trouvées (Économie +
+      Marché du travail), correspondance exacte avec les articles réels observés sur
+      hcp.ma. Un cas réel a mis en évidence un trou : une page en arabe remontée par
+      la découverte automatique (n'arrivait jamais avec l'ancienne liste choisie à la
+      main). Corrigé : `_extraire_urls_articles` détecte la langue de chaque lien
+      (même heuristique que pour les pièces jointes) et les pages arabes sont
+      écartées par défaut. Reste à compléter l'inventaire des pages listing pour
+      Économie (au-delà de "Etudes économiques") et Population & démographie (aucune
+      page listing agrégée trouvée pour l'instant, à vérifier sous-thème par
+      sous-thème).
 - [ ] Chunking + embeddings (`IndexeurTexte.indexer`), en ne traitant QUE les
       `Document` de type `pdf`/`xlsx` (filtrer `type == "html"` explicitement)
 - [ ] Indexation Chroma + BM25

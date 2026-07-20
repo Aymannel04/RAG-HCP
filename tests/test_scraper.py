@@ -193,11 +193,62 @@ def test_extraire_urls_articles_pas_de_faux_positif_sur_menu_reel():
 
 def test_extraire_urls_articles_deduplique_lien_titre_et_lire_la_suite():
     soup = BeautifulSoup(PAGE_LISTING_TYPE, "lxml")
-    urls = Scraper._extraire_urls_articles(soup, "https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
-    assert urls == [
-        "https://www.hcp.ma/Informalite-genre-et-vieillissement-inegalites-cumulatives-et-effets-intergenerationnels-Mai-2026_a4311.html",
-        "https://www.hcp.ma/Activite-emploi-et-chomage-resultats-annuels-2025_a4310.html",
+    resultats = Scraper._extraire_urls_articles(soup, "https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
+    assert resultats == [
+        (
+            "https://www.hcp.ma/Informalite-genre-et-vieillissement-inegalites-cumulatives-et-effets-intergenerationnels-Mai-2026_a4311.html",
+            "fr",
+        ),
+        (
+            "https://www.hcp.ma/Activite-emploi-et-chomage-resultats-annuels-2025_a4310.html",
+            "fr",
+        ),
     ]
+
+
+# --- ADR 0006, suite : filtrage des versions arabes ---------------------------------
+#
+# Trouve en conditions reelles le 20 juillet 2026 (premiere execution du script par
+# Ayman) : la decouverte automatique remonte aussi des versions arabes d'articles, qui
+# n'apparaissaient jamais dans l'ancienne liste fixe (URLs choisies a la main en
+# francais). Fixture reconstruite depuis le vrai cas trouve :
+# https://www.hcp.ma/Situation-du-marche-du-travail-dans-la-region-de-Rabat-Sale-Kenitra-en-2024-version-Ar_a4217.html
+# titre reel du lien : "Situation du marché du travail dans la région de
+# Rabat - Salé - Kénitra en 2024 (version Ar)".
+
+def test_extraire_urls_articles_detecte_la_langue_arabe_via_le_texte_du_lien():
+    html = (
+        '<h3><a href="https://www.hcp.ma/Situation-du-marche-du-travail-dans-la-region-de-'
+        'Rabat-Sale-Kenitra-en-2024-version-Ar_a4217.html">Situation du marché du travail '
+        "dans la région de Rabat - Salé - Kénitra en 2024 (version Ar)</a></h3>"
+    )
+    soup = BeautifulSoup(html, "lxml")
+    resultats = Scraper._extraire_urls_articles(soup, "https://www.hcp.ma/Publications-Marche-du-travail_r425.html")
+    assert resultats == [
+        (
+            "https://www.hcp.ma/Situation-du-marche-du-travail-dans-la-region-de-Rabat-Sale-Kenitra-en-2024-version-Ar_a4217.html",
+            "ar",
+        )
+    ]
+
+
+@patch("src.scraper.requests.get")
+def test_decouvrir_urls_liste_ecarte_les_pages_arabes_par_defaut(mock_get):
+    page_1 = MagicMock()
+    page_1.text = (
+        MENU_HCP_TYPE
+        + '<h3><a href="https://www.hcp.ma/Article-fr_a1111.html">Un article francais</a></h3>'
+        + '<h3><a href="https://www.hcp.ma/Article-ar-version-Ar_a2222.html">Un article (version Ar)</a></h3>'
+    )
+    page_1.raise_for_status = MagicMock()
+    mock_get.return_value = page_1
+
+    scraper = Scraper(delay=0)
+    urls = scraper.decouvrir_urls_liste(
+        "https://www.hcp.ma/Publications-Marche-du-travail_r425.html", max_pages=1
+    )
+
+    assert urls == ["https://www.hcp.ma/Article-fr_a1111.html"]
 
 
 def test_increments_pagination_deduits_des_liens_reels():

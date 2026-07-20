@@ -310,3 +310,25 @@ de stage en fin de période, pas besoin d'être exhaustif.
   une comparaison de hash de contenu, hors perimetre de cet ADR.
 - Comme pour le DOCX (ADR 0005), reste a valider en conditions reelles sur la machine
   d'Ayman (`scripts/decouverte_publications.py`), pas d'acces reseau hcp.ma ici.
+
+## 20 juillet 2026 — validation reelle de la decouverte + filtre arabe
+
+- Ayman a execute `python -m scripts.decouverte_publications quotidien` sur sa
+  machine : 5 URLs trouvees pour Economie, 5 pour Marche du travail (Population
+  ignoree comme attendu, listing pas encore configure). Les 10 URLs correspondent
+  exactement, titre par titre, aux articles observes en direct sur hcp.ma pendant la
+  verification du 20 juillet — premier test reel du mecanisme de decouverte : succes,
+  aucune correction necessaire sur la logique de pagination/extraction elle-meme.
+- Un cas reel a neanmoins ete repere dans les resultats : une page en arabe
+  (`Situation-du-marche-du-travail-dans-la-region-de-Rabat-Sale-Kenitra-en-2024-version-Ar_a4217.html`,
+  titre de lien "... (version Ar)") remontee par la decouverte automatique. Avec
+  l'ancienne liste fixe de 27 URLs, ce cas n'arrivait jamais (Ayman choisissait les
+  pages a la main, toutes en francais) — la decouverte automatique, elle, remonte le
+  listing tel quel, versions arabes comprises.
+- Corrige dans `src/scraper.py` : `_extraire_urls_articles` detecte maintenant la
+  langue de chaque lien d'article (meme heuristique `_detecter_langue` que pour les
+  pieces jointes, sur un signal URL + texte du lien — "(version Ar)" dans le texte
+  suffit, meme quand l'URL seule ne le signale pas clairement) ; nouvelle methode
+  `_filtrer_urls_arabe` ecarte ces pages par defaut (`self.inclure_arabe`, meme regle
+  que pour les pieces jointes, hors scope V1). 2 nouveaux tests avec fixture
+  reconstruite depuis le cas reel trouve. Suite complete : 24/24 tests passes.
