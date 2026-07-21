@@ -73,6 +73,23 @@ def test_rechercher_indicateur_discrimine_activite_vs_emploi(conn):
     assert resultat.nom == "Taux net d'activité"
 
 
+def test_rechercher_indicateur_match_ambigu_sur_taux_seul_renvoie_none(conn):
+    # Regression : bug reel du 21 juillet 2026, "Quel est le taux de travail ?" ne
+    # partage que le mot "taux" avec presque tous les indicateurs de la base --
+    # aucun n'est assez distinctif pour etre choisi avec confiance.
+    _peupler_indicateurs_realistes(conn)
+    resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de travail ?")
+    assert resultat is None
+
+
+def test_rechercher_indicateur_mot_distinctif_unique_reste_accepte(conn):
+    # Un score de 1 n'est pas rejete s'il n'y a pas d'ambiguite (un seul candidat
+    # contient ce mot) : "urbanisation" seul suffit a identifier l'indicateur.
+    _peupler_indicateurs_realistes(conn)
+    resultat = LookupStructure(conn).rechercher_indicateur("Urbanisation ?")
+    assert resultat.nom == "Taux d'urbanisation"
+
+
 def test_rechercher_indicateur_avec_region_mentionnee(conn):
     _peupler_indicateurs_realistes(conn)
     resultat = LookupStructure(conn).rechercher_indicateur(

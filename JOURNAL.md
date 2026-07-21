@@ -652,3 +652,26 @@ de stage en fin de période, pas besoin d'être exhaustif.
   bge-reranker-v2-m3, Mistral, API BDS) et un vrai bug de conditions reelles trouve
   et corrige au passage -- exactement le genre de probleme qu'aucun test avec donnees
   factices n'aurait pu reveler.
+
+## 21 juillet 2026 (suite 5) — deuxieme bug reel : faux-positif de LookupStructure
+
+- Ayman a teste "Quel est le taux de travail ?" (question volontairement approximative,
+  pas un vrai libelle d'indicateur) : reponse confiante mais fausse -- "Taux
+  d'urbanisation, 62.8%", sans rapport avec la question.
+- Cause : presque tous les noms d'indicateurs BDS commencent par "Taux", donc avec
+  seulement ce mot en commun, la quasi-totalite des indicateurs de la base decrochait
+  le meme score de recouvrement (1) -- le tie-break (premier insere en base) tranchait
+  alors arbitrairement en faveur de "Taux d'urbanisation" plutot que "Taux net
+  d'activite"/"Taux d'emploi" (plus pertinents pour "travail"), sans aucun signal
+  d'incertitude dans la reponse. Plus grave que le bug d'unite precedent : c'est
+  exactement le risque que le projet est cense eliminer (chiffre officiel associe au
+  mauvais indicateur, presente avec la meme confiance qu'une bonne reponse).
+- Corrige dans `LookupStructure._meilleur_nom_correspondant` : si plusieurs noms sont
+  a egalite sur le meilleur score ET que ce score vaut seulement 1 (un seul mot
+  partage, typiquement "taux"), la correspondance est jugee trop ambigue -> renvoie
+  None -> le Routeur bascule sur RetrievalReranker (repli deja en place depuis
+  l'orchestration Sprint 3) plutot que d'inventer un indicateur. Un score de 1 SANS
+  ambiguite (mot distinctif unique, ex. "urbanisation") reste accepte -- verifie par
+  un nouveau test dedie, pour ne pas sur-corriger et rejeter des matchs legitimes.
+- 2 nouveaux tests de regression (match ambigu -> None ; mot distinctif unique ->
+  toujours accepte). Suite complete : 93/93.

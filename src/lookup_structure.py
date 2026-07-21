@@ -120,17 +120,39 @@ class LookupStructure:
 
     @classmethod
     def _meilleur_nom_correspondant(cls, question: str, noms_disponibles: list[str]) -> Optional[str]:
+        """Trouve le nom d'indicateur le plus proche de la question par recouvrement
+        de tokens, ou None si aucune correspondance n'est assez fiable.
+
+        Bug reel trouve le 21 juillet 2026 (question "Quel est le taux de travail ?") :
+        presque tous les noms d'indicateurs BDS commencent par "Taux" -- avec le seul
+        mot "taux" en commun, quasiment tous les indicateurs de la base decrochaient
+        le meme score (1), et le tie-break (premier insere) choisissait arbitrairement
+        "Taux d'urbanisation" a la place de "Taux net d'activite"/"Taux d'emploi" (plus
+        pertinents), avec une reponse presentee comme sure d'elle. Corrige en refusant
+        tout match ambigu : si plusieurs noms sont a egalite sur le meilleur score ET
+        que ce score ne repose que sur un seul mot partage (typiquement "taux" seul),
+        on renvoie None plutot que de trancher au hasard -- le Routeur bascule alors
+        sur RetrievalReranker (voir scripts/poser_question.py), plus honnete qu'une
+        valeur chiffree associee au mauvais indicateur. Un score de 1 SANS ambiguite
+        (un seul nom candidat, ex. correspondance sur un mot distinctif comme
+        "urbanisation") reste accepte.
+        """
         tokens_question = cls._tokeniser(question)
         if not tokens_question:
             return None
 
-        meilleur_nom, meilleur_score = None, 0
-        for nom in noms_disponibles:
-            score = len(tokens_question & cls._tokeniser(nom))
-            if score > meilleur_score:
-                meilleur_nom, meilleur_score = nom, score
+        scores: dict[str, int] = {
+            nom: len(tokens_question & cls._tokeniser(nom)) for nom in noms_disponibles
+        }
+        meilleur_score = max(scores.values(), default=0)
+        if meilleur_score == 0:
+            return None
 
-        return meilleur_nom
+        meilleurs_noms = [nom for nom in noms_disponibles if scores[nom] == meilleur_score]
+        if len(meilleurs_noms) > 1 and meilleur_score <= 1:
+            return None  # ambigu : plusieurs indicateurs a egalite sur un seul mot commun
+
+        return meilleurs_noms[0]
 
     @staticmethod
     def _tokeniser(texte: str) -> set[str]:
