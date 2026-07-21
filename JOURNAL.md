@@ -675,3 +675,30 @@ de stage en fin de période, pas besoin d'être exhaustif.
   un nouveau test dedie, pour ne pas sur-corriger et rejeter des matchs legitimes.
 - 2 nouveaux tests de regression (match ambigu -> None ; mot distinctif unique ->
   toujours accepte). Suite complete : 93/93.
+- Ayman a valide les deux cas en reel : "taux de travail" bascule desormais
+  proprement sur RetrievalReranker, avec une reponse Mistral qui reconnait
+  explicitement l'absence de cet indicateur et propose les libelles disponibles
+  (taux d'activite, d'emploi, de chomage) -- comportement anti-hallucination
+  exemplaire, meilleur que prevu. "Taux d'urbanisation" continue de matcher
+  correctement (pas de sur-correction).
+
+## 21 juillet 2026 (suite 6) — troisieme bug reel : sensibilite aux accents
+
+- Test bonus d'Ayman ("Quel est le taux de chomage pour les femmes", sans accent sur
+  "chomage") : la question bascule a tort sur RetrievalReranker au lieu du chemin
+  chiffre -- reponse quand meme correcte et sourcee (18,3 %, tiree d'un rapport texte
+  via Mistral), mais ce n'est pas le chemin voulu. Le vrai indicateur BDS structure
+  (I4001, avec ventilation par sexe) existe bien en base et aurait du repondre.
+- Cause : `LookupStructure._tokeniser` comparait les tokens sans normaliser les
+  accents -- "chomage" (tape sans accent, tres frequent en usage reel/clavier) et
+  "chômage" (tel quel dans le libelle BDS) sont deux tokens differents pour un set
+  Python, donc aucun recouvrement sur ce mot precis.
+- Corrige par une fonction `_normaliser_accents` (unicodedata, decomposition NFD +
+  filtrage des marques diacritiques) appliquee a la fois dans `_tokeniser` et dans
+  `_extraire_region` (meme probleme potentiel sur des noms de region accentues,
+  ex. "Rabat-Salé-Kénitra"). 2 nouveaux tests de regression (indicateur et region
+  sans accents). Suite complete : 95/95.
+- Trois bugs reels trouves et corriges le meme jour sur `LookupStructure`/
+  `Generateur`, tous invisibles dans les tests avec donnees factices -- confirme
+  la valeur du test en conditions reelles a chaque etape plutot qu'une seule
+  passe finale.

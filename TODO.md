@@ -218,10 +218,14 @@ précédents) — validation à grande échelle d'ADR 0004.
 
 `python -m scripts.poser_question "Quel est le taux de chômage actuel ?"` validé en
 conditions réelles le 21/07 : bon indicateur trouvé, bonne période, source citée
-correctement. Bug réel trouvé et corrigé au passage : unité BDS renvoyée en
-majuscules ("POURCENTAGE") jamais normalisée — `Generateur._unite_formatee` ajouté,
-3 tests de régression. **Sprint 3 validé en conditions réelles sur ses deux
-scénarios** (figures 5 et 6). Suite complète : 91/91.
+correctement. Trois bugs réels trouvés et corrigés le même jour, tous invisibles en tests avec
+données factices : unité BDS en majuscules ("POURCENTAGE" au lieu de "%",
+`Generateur._unite_formatee`), faux-positif de `LookupStructure` sur le seul mot
+"taux" (réponse confiante mais fausse — corrigé en détectant l'ambiguïté et en
+renvoyant None pour basculer sur RetrievalReranker), et sensibilité aux accents
+("chomage" sans accent ne matchait pas "chômage" — corrigé par normalisation
+Unicode). **Sprint 3 validé en conditions réelles sur ses deux scénarios**
+(figures 5 et 6). Suite complète : 95/95.
 
 ---
 

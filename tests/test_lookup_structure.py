@@ -90,6 +90,24 @@ def test_rechercher_indicateur_mot_distinctif_unique_reste_accepte(conn):
     assert resultat.nom == "Taux d'urbanisation"
 
 
+def test_rechercher_indicateur_sans_accents_matche_quand_meme(conn):
+    # Regression : bug reel du 21 juillet 2026, "chomage" tape sans accent ne
+    # correspondait pas a "chômage" en base -- faisait basculer a tort sur
+    # RetrievalReranker au lieu de la reponse structuree exacte.
+    _peupler_indicateurs_realistes(conn)
+    resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de chomage pour les femmes")
+    assert resultat is not None
+    assert resultat.nom == "Taux de chômage selon le Milieu, le sexe et le groupe d'âges"
+
+
+def test_rechercher_indicateur_region_sans_accents_matche_quand_meme(conn):
+    _peupler_indicateurs_realistes(conn)
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        "Quel est le taux de chomage par region a Rabat-Sale-Kenitra ?"
+    )
+    assert resultat.region == "Rabat-Salé-Kénitra"
+
+
 def test_rechercher_indicateur_avec_region_mentionnee(conn):
     _peupler_indicateurs_realistes(conn)
     resultat = LookupStructure(conn).rechercher_indicateur(

@@ -34,9 +34,20 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import unicodedata
 from typing import Optional
 
 from .models import Indicateur
+
+
+def _normaliser_accents(texte: str) -> str:
+    """Retire les diacritiques (ex. "chômage" -> "chomage"), pour tolerer les
+    questions tapees sans accents -- frequent en usage reel (voir test reel du
+    21 juillet 2026 : "quel est le taux de chomage" sans accent ne correspondait pas
+    a "chômage" en base, faisait basculer a tort sur RetrievalReranker au lieu de la
+    reponse structuree exacte, contraire au principe fondateur ADR 0001)."""
+    forme_decomposee = unicodedata.normalize("NFD", texte)
+    return "".join(c for c in forme_decomposee if unicodedata.category(c) != "Mn")
 
 # Mots-outils français exclus du calcul de recouvrement (voir docstring de module).
 # Volontairement courte : seulement ce qui apparaît réellement dans les noms
@@ -156,21 +167,22 @@ class LookupStructure:
 
     @staticmethod
     def _tokeniser(texte: str) -> set[str]:
-        tokens = re.findall(r"\w+", texte.lower())
+        tokens = re.findall(r"\w+", _normaliser_accents(texte.lower()))
         return {t for t in tokens if t not in MOTS_OUTILS}
 
     def _extraire_region(self, question: str, nom: str) -> Optional[str]:
         """Cherche si une des régions connues pour cet indicateur apparaît
-        littéralement dans la question ; sinon retombe sur la ligne nationale
-        (region IS NULL, convention déjà utilisée par ConstructeurIndicateurs pour
-        les indicateurs sans ventilation géographique)."""
-        signal = question.lower()
+        littéralement dans la question (comparaison insensible aux accents, même
+        raison que `_tokeniser`) ; sinon retombe sur la ligne nationale (region IS
+        NULL, convention déjà utilisée par ConstructeurIndicateurs pour les
+        indicateurs sans ventilation géographique)."""
+        signal = _normaliser_accents(question.lower())
         regions = self._conn.execute(
             "SELECT DISTINCT region FROM indicateur WHERE nom = ? AND region IS NOT NULL",
             (nom,),
         ).fetchall()
         for (region,) in regions:
-            if region and region.lower() in signal:
+            if region and _normaliser_accents(region.lower()) in signal:
                 return region
         return None
 
