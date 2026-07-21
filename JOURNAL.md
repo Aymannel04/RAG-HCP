@@ -702,3 +702,13 @@ de stage en fin de période, pas besoin d'être exhaustif.
   `Generateur`, tous invisibles dans les tests avec donnees factices -- confirme
   la valeur du test en conditions reelles a chaque etape plutot qu'une seule
   passe finale.
+- Test de confirmation d'Ayman ("Quel est le taux de chomage pour les femmes") :
+  route desormais bien vers `LookupStructure`, MAIS renvoie le taux national tous
+  sexes confondus, pas le taux feminin -- le "pour les femmes" n'est pas pris en
+  compte. Cause : les libelles BDS ("Feminin"/"Masculin") ne partagent aucun mot
+  avec "femmes"/"hommes". Delibérément PAS corrige aujourd'hui (contrairement aux
+  3 bugs precedents) : un mapping de synonymes naif risquerait de renvoyer un
+  sous-groupe tres specifique (croisement sexe+milieu+age dans le meme champ
+  `region`) maquille en taux feminin general -- pire que l'actuelle reponse
+  agregee honnete. Documente comme limite connue dans TODO.md, a traiter
+  proprement dans un sprint dedie plutot qu'en correctif rapide.

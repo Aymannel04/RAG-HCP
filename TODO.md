@@ -227,6 +227,19 @@ renvoyant None pour basculer sur RetrievalReranker), et sensibilité aux accents
 Unicode). **Sprint 3 validé en conditions réelles sur ses deux scénarios**
 (figures 5 et 6). Suite complète : 95/95.
 
+**Limite connue, non corrigée volontairement (21/07)** : `LookupStructure` ne filtre
+pas par sexe/milieu/groupe d'âge quand la question les mentionne en langage naturel
+("pour les femmes") — les libellés BDS ("Féminin"/"Masculin") ne partagent aucun mot
+avec "femmes"/"hommes", donc aucune correspondance, retombe sur la ligne agrégée
+(tous sexes confondus) sans le signaler. Repéré en test réel
+(`"Quel est le taux de chômage pour les femmes"` -> renvoie le taux national, pas le
+taux féminin). Pas de correctif rapide sûr : ces indicateurs croisent souvent
+sexe + milieu + groupe d'âge simultanément dans le même champ `region` — un mapping
+de synonymes naïf risquerait de renvoyer un sous-groupe très spécifique (ex. "femmes
+urbaines 15-24 ans") maquillé en taux féminin général, pire que la réponse agrégée
+actuelle. À traiter proprement dans un sprint dédié (dictionnaire de synonymes +
+désambiguïsation des dimensions croisées), pas en correctif à la volée.
+
 ---
 
 ## Sprint 4 (28 juillet - 3 août) — Interface + évaluation
