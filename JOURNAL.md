@@ -609,3 +609,19 @@ de stage en fin de période, pas besoin d'être exhaustif.
   (chemin notion). Reste a tester le chemin chiffre en conditions reelles (question
   sur un indicateur precis, ex. "quel est le taux de chomage actuel") une fois des
   indicateurs BDS presents en base (`scripts/preremplir_indicateurs_bds.py`).
+
+## 21 juillet 2026 (suite 3) — pre-remplissage BDS a pleine echelle : 35561 lignes
+
+- Ayman a lance `python -m scripts.preremplir_indicateurs_bds` en reel sur les 18
+  codes cures (data/indicateurs_cures.py) : **35561 lignes d'indicateurs upsertees,
+  0 echec**. Bien plus gros que les tests ponctuels precedents (un seul code a la
+  fois) -- premiere validation a pleine echelle du pipeline complet ADR 0004
+  (bds_client -> ConstructeurIndicateurs.structurer_depuis_bds -> base_donnees).
+- Quelques volumes notables : I3981 (Indice des prix a la consommation) a lui seul
+  24696 lignes (ventilation fine par produit/ville sans doute), I3287 (taux de
+  chomage par sexe et region) 1072 lignes, I3181 (valeurs ajoutees par branche)
+  1020 lignes. Confirme que `inserer_indicateur` (upsert applicatif sur nom/periode/
+  region/code_bds, Sprint 2) tient la charge sans probleme visible.
+- La base contient desormais de vrais indicateurs BDS complets sur les 3 categories :
+  next step naturel, tester `LookupStructure`/`Generateur` (chemin chiffre, figure 5)
+  en conditions reelles avec ce volume de donnees.

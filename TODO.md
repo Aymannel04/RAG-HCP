@@ -210,9 +210,12 @@ voir ci-dessus).
 **Validé en conditions réelles le 21/07** : `python -m scripts.poser_question "C'est
 quoi le RGPH ?"` exécuté de bout en bout avec tous les composants réels (BGE-M3,
 bge-reranker-v2-m3, Mistral) — réponse correcte, sourcée (titre + date + URL réels),
-sans chiffre inventé. Scénario de la figure 6 validé pour de vrai. **Reste** : tester
-le chemin chiffré (figure 5) en conditions réelles une fois des indicateurs BDS en
-base (`python -m scripts.preremplir_indicateurs_bds`).
+sans chiffre inventé. Scénario de la figure 6 validé pour de vrai.
+
+`python -m scripts.preremplir_indicateurs_bds` exécuté à pleine échelle le 21/07 :
+**35561 lignes upsertées, 0 échec sur 18 codes** (bien au-delà des tests ponctuels
+précédents) — validation à grande échelle d'ADR 0004. **Reste** : tester le chemin
+chiffré (figure 5) en conditions réelles maintenant que la base est peuplée.
 
 ---
 
