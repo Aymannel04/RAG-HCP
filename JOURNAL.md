@@ -581,3 +581,31 @@ de stage en fin de période, pas besoin d'être exhaustif.
   generer une cle API, la mettre dans `.env`, puis lancer
   `python -m scripts.poser_question "question"` en conditions reelles -- premiere
   execution complete du chemin notion avec un vrai LLM, jamais testee jusqu'ici.
+
+## 21 juillet 2026 (suite 2) — premier test reel complet du chemin notion : succes
+
+- Petit incident de parcours resolu seul par Ayman : `.env` cree via Notepad s'etait
+  enregistre en `.env.txt` (piege classique Windows, extension masquee) -- renomme,
+  cle relue correctement par `python-dotenv`.
+- `python -m scripts.poser_question "C'est quoi le RGPH ?"` execute en conditions
+  reelles de bout en bout, pour la premiere fois avec absolument tous les composants
+  reels (aucune fonction factice) : `Routeur.classifier` -> NOTION -> vrai BGE-M3
+  (deja en cache) -> vrai `bge-reranker-v2-m3` (cache depuis le test precedent,
+  chargement instantane) -> vrai appel Mistral (`mistral-small-latest`) -> reponse.
+- Resultat : reponse en francais, correcte, sourcee avec titre exact + date + URL
+  reelle de la publication ("RGPH 2024, caracteristiques demographiques et
+  socio-economiques..."). Grounding respecte (pas de chiffre invente), citation
+  systematique -- exactement les deux garanties visees par le projet (README.md,
+  section "Idee du projet").
+- Ceci valide en conditions reelles : ADR 0007 (reranker), le choix Mistral (ADR
+  0002), et l'orchestration complete `scripts/poser_question.py` -- le scenario de
+  la figure 6 de docs/conception_uml_v3.pdf fonctionne reellement de bout en bout,
+  pas seulement en tests avec composants factices.
+- Point cosmetique releve, pas bloquant : Mistral renvoie du markdown (`**gras**`)
+  dans le texte -- lisible tel quel dans un futur rendu Streamlit (`st.markdown`),
+  mais s'affiche litteralement dans la sortie console actuelle. A ajuster si besoin
+  au moment de l'Interface (semaine 4).
+- Sprint 3 desormais valide en conditions reelles sur son scenario le plus complexe
+  (chemin notion). Reste a tester le chemin chiffre en conditions reelles (question
+  sur un indicateur precis, ex. "quel est le taux de chomage actuel") une fois des
+  indicateurs BDS presents en base (`scripts/preremplir_indicateurs_bds.py`).

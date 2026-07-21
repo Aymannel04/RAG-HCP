@@ -205,9 +205,14 @@ Backlog :
 **Definition of done :** les deux diagrammes de séquence (`docs/conception_uml_v3.pdf`,
 figures 5 et 6) fonctionnent réellement en code, sur des vraies données indexées en
 Sprint 2. **Fonctionnellement complet côté code**, LLM de production choisi (Mistral,
-voir ci-dessus). **Reste à valider en conditions réelles** sur la machine d'Ayman : le
-vrai cross-encoder `bge-reranker-v2-m3` (comme BGE-M3 en Sprint 2), et le chemin notion
-complet avec une vraie clé API Mistral (jamais testé pour de vrai jusqu'ici).
+voir ci-dessus).
+
+**Validé en conditions réelles le 21/07** : `python -m scripts.poser_question "C'est
+quoi le RGPH ?"` exécuté de bout en bout avec tous les composants réels (BGE-M3,
+bge-reranker-v2-m3, Mistral) — réponse correcte, sourcée (titre + date + URL réels),
+sans chiffre inventé. Scénario de la figure 6 validé pour de vrai. **Reste** : tester
+le chemin chiffré (figure 5) en conditions réelles une fois des indicateurs BDS en
+base (`python -m scripts.preremplir_indicateurs_bds`).
 
 ---
 
