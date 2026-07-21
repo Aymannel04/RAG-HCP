@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from src import llm_mistral
 from src.base_donnees import connecter
 from src.generateur import Generateur, Reponse
 from src.indexeur_texte import IndexeurTexte
@@ -69,9 +70,10 @@ def main(question: str, chemin_db: Optional[Path] = None) -> None:
         indexeur = IndexeurTexte()
         reranker = RetrievalReranker(indexeur)  # vrai cross-encoder, voir ADR 0007
         routeur = Routeur()
-        generateur = Generateur(conn)  # fonction_generation non fournie : le chemin
-        # chiffre marche sans LLM (voir Generateur), le chemin notion levera une
-        # erreur explicite si la question s'y engage tant que le LLM n'est pas choisi.
+        # Mistral choisi comme LLM de production le 21 juillet 2026 (voir ADR 0002,
+        # src/llm_mistral.py) : necessite MISTRAL_API_KEY dans un fichier .env. Le
+        # chemin chiffre fonctionne meme sans cle configuree (voir Generateur).
+        generateur = Generateur(conn, fonction_generation=llm_mistral.generer)
 
         reponse = poser_question(conn, reranker, routeur, generateur, question)
 

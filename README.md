@@ -56,6 +56,16 @@ source venv/bin/activate  # ou venv\Scripts\activate sous Windows
 pip install -r requirements.txt
 ```
 
+Pour la génération de réponse (chemin "notion", voir `src/generateur.py` et ADR 0002) :
+créer un compte gratuit sur [console.mistral.ai](https://console.mistral.ai/), générer
+une clé API, puis créer un fichier `.env` à la racine du projet (jamais commité) :
+
+```
+MISTRAL_API_KEY=ta_cle_ici
+```
+
+Le chemin "chiffre" (questions sur un indicateur précis) fonctionne sans cette clé.
+
 ## Lancer les tests
 
 ```bash
@@ -64,5 +74,6 @@ pytest tests/ -v
 
 ## Statut d'avancement
 
-Voir `TODO.md`. En résumé : cadrage et conception terminés, réalisation en cours (squelette du code
-en place, scraper fonctionnel à tester et affiner, reste du pipeline à implémenter).
+Voir `TODO.md`. En résumé : cadrage et conception terminés, Sprints 1 et 2 (collecte, extraction,
+indexation) validés en conditions réelles, Sprint 3 (retrieval + génération) fonctionnellement
+complet côté code — reste la validation en conditions réelles du reranker et du LLM Mistral.

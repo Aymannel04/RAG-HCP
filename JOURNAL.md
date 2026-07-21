@@ -547,3 +547,37 @@ de stage en fin de période, pas besoin d'être exhaustif.
   surtout, a faire trancher par l'encadrante le choix du LLM de generation pour le
   chemin notion -- le chemin chiffre, lui, fonctionne deja reellement des qu'un
   indicateur est en base, sans attendre cette decision.
+
+## 21 juillet 2026 (suite) — choix du LLM de generation tranche : Mistral
+
+- Ayman a rapporte la reponse de l'encadrante : "n'importe quel LLM gratuit qui fait
+  le travail" pour la phase prototype. Point bloquant de l'ADR 0002 (ouvert depuis le
+  Sprint 1) enfin resolu.
+- Comparaison des options gratuites 2026 (recherche web, voir sources dans l'echange) :
+  Google Gemini (1500 req/jour, contexte 1M), Groq (Llama 3.3 70B, tres rapide,
+  1000 req/jour), Mistral (~1 milliard de tokens/mois, tier "Experiment"). Point
+  souleve sur toutes ces options : le tier gratuit implique generalement un opt-in a
+  l'entrainement sur les prompts envoyes.
+- Ayman a clarifie que ce n'est pas un probleme ici : les documents indexes par le RAG
+  sont des publications deja publiques du HCP (hcp.ma), aucune donnee confidentielle
+  n'est en jeu -- contrairement a l'inquietude initiale de l'ADR 0002 qui visait un cas
+  plus general.
+- Mistral retenu (entreprise francaise, meilleure qualite attendue en francais pour
+  restituer des publications administratives/statistiques marocaines, choix plus
+  simple a justifier que "un modele anglophone quelconque").
+- `src/llm_mistral.py` (nouveau) : fonction `generer(question, texte_contexte)`
+  compatible avec `Generateur.fonction_generation`, appel REST direct a l'API Mistral
+  (`requests`, pas de SDK, coherent avec `src/bds_client.py`), prompt systeme imposant
+  le grounding strict ("reponds UNIQUEMENT a partir du contexte fourni... si le
+  contexte ne permet pas de repondre, dis-le explicitement"). Cle API lue depuis
+  `.env` (`MISTRAL_API_KEY`, `python-dotenv` deja dans requirements.txt, jamais
+  commite). 3 tests avec `requests.post` simule (meme patron que test_scraper.py) :
+  erreur claire si cle absente, contenu du prompt envoye, propagation des erreurs HTTP.
+- `scripts/poser_question.py` cable desormais `llm_mistral.generer` par defaut dans
+  `main()`. `docs/adr/0002-stack-technique-prototype.md` mis a jour (LLM "tranche",
+  justification de l'absence de risque de fuite de donnees).
+- Suite de tests complete : 88/88.
+- **Reste a faire** : Ayman doit creer un compte gratuit sur console.mistral.ai,
+  generer une cle API, la mettre dans `.env`, puis lancer
+  `python -m scripts.poser_question "question"` en conditions reelles -- premiere
+  execution complete du chemin notion avec un vrai LLM, jamais testee jusqu'ici.

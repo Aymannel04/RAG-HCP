@@ -190,23 +190,24 @@ Backlog :
       chemin chiffré par gabarit déterministe (aucun LLM requis, conforme à
       docs/conception_uml_v3.pdf figure 5 : "sans marge d'interprétation sur le
       chiffre"), chemin notion via fonction de génération LLM injectable (7 tests).
-      **Point ouvert, documenté dans le code** : le choix du LLM de production reste à
-      valider avec l'encadrante (ADR 0002) — sans injection, le chemin notion lève une
-      erreur explicite plutôt que d'inventer une réponse.
+      **Point résolu le 21/07** : l'encadrante a validé "n'importe quel LLM gratuit qui
+      fait le travail" pour le prototype. Mistral retenu (voir ADR 0002 mis à jour,
+      `src/llm_mistral.py`) — aucun risque de fuite de données puisque les documents
+      indexés sont déjà des publications publiques du HCP. Câblé dans
+      `scripts/poser_question.py`. Reste à créer une clé API gratuite et tester en
+      conditions réelles (voir JOURNAL.md, 21/07 suite).
 - [x] Script d'orchestration (`scripts/poser_question.py`) reliant Routeur ->
       LookupStructure/RetrievalReranker -> Generateur, avec repli chiffré -> notion si
       aucun indicateur exact trouvé. 4 tests bout en bout.
 - [x] Tests de bout en bout sur les deux scénarios (question chiffrée / conceptuelle) —
-      33 nouveaux tests Sprint 3, suite complète du projet : 85/85.
+      36 nouveaux tests Sprint 3, suite complète du projet : 88/88.
 
 **Definition of done :** les deux diagrammes de séquence (`docs/conception_uml_v3.pdf`,
 figures 5 et 6) fonctionnent réellement en code, sur des vraies données indexées en
-Sprint 2. **Fonctionnellement complet côté code** (tests unitaires/intégration avec
-fonctions embedding/reranking/génération factices). **Reste à valider en conditions
-réelles** sur la machine d'Ayman : le vrai cross-encoder `bge-reranker-v2-m3` (comme
-BGE-M3 en Sprint 2), et surtout le chemin notion complet une fois le LLM de production
-choisi avec l'encadrante — sans ce choix, `python -m scripts.poser_question` fonctionne
-déjà réellement pour toute question chiffrée dont l'indicateur est en base.
+Sprint 2. **Fonctionnellement complet côté code**, LLM de production choisi (Mistral,
+voir ci-dessus). **Reste à valider en conditions réelles** sur la machine d'Ayman : le
+vrai cross-encoder `bge-reranker-v2-m3` (comme BGE-M3 en Sprint 2), et le chemin notion
+complet avec une vraie clé API Mistral (jamais testé pour de vrai jusqu'ici).
 
 ---
 
