@@ -494,3 +494,56 @@ de stage en fin de période, pas besoin d'être exhaustif.
   de fichiers cibles (PDF, XLSX -- via extraction reelle Sprint 1, DOCX) tous
   confirmes sur de vraies publications hcp.ma.
 - `docs/rapport_sprint2.pdf`/`.tex` mis a jour avec ce resultat final.
+
+## 21 juillet 2026 — demarrage Sprint 3 : Routeur, LookupStructure, RetrievalReranker, Generateur
+
+- Sprint 2 clos, "go ahead" d'Ayman pour attaquer le Sprint 3 (retrieval + generation,
+  voir TODO.md). Releve prealable du point explicitement flagge comme bloquant dans
+  l'ADR 0002 ("le choix du LLM de generation... doit etre valide avec l'encadrante") :
+  jamais resolu depuis. Plutot que d'attendre, meme strategie que pour BGE-M3 en
+  Sprint 2 -- fonction de generation injectable, toute la logique de grounding/citation
+  ecrite et testee des maintenant, le vrai LLM restant a cabler en une ligne une fois le
+  choix arrete.
+- `src/routeur.py` : `Routeur.classifier` implemente par heuristique de mots-cles
+  (signal narratif prioritaire sur signal chiffre -- une question comme "pourquoi le
+  chomage a-t-il augmente" a les deux composantes mais seul RetrievalReranker peut
+  repondre au "pourquoi"), plutot que par appel LLM comme l'envisageait le docstring
+  d'origine. Deja l'option V1 proposee a l'encadrante dans
+  docs/note_stockage_routage_benchmark.pdf. 11 tests, aucune dependance externe.
+- `src/lookup_structure.py` : `LookupStructure(conn).rechercher_indicateur(question)`
+  fait correspondre la question a un nom d'indicateur reel en base par recouvrement de
+  tokens (les noms viennent tels quels de l'API BDS, ex. "Taux de chomage selon le
+  Milieu, le sexe et le groupe d'ages" -- jamais formules comme une question), extrait
+  region/periode de la question si mentionnees, execute une requete SQL exacte. Repli
+  sur la derniere periode connue si le filtre exact ne donne rien. 7 tests avec une
+  vraie base SQLite peuplee de libelles realistes (dont un cas de discrimination entre
+  plusieurs indicateurs contenant tous "taux").
+- `src/retrieval_reranker.py` : `RetrievalReranker.rechercher_et_trier` interroge
+  `IndexeurTexte.rechercher` (Sprint 2) puis reordonne par cross-encoder. Modele choisi
+  et documente dans un nouvel ADR (0007) : `BAAI/bge-reranker-v2-m3`, meme famille que
+  BGE-M3 deja retenu pour les embeddings (ADR 0002) -- coherent, multilingue, open
+  source, aucune dependance au point encore ouvert sur le LLM de generation (un
+  reranker n'est pas un LLM generatif). Fonction de reranking injectable, 4 tests avec
+  vrai IndexeurTexte/Chroma/BM25.
+- `src/generateur.py` : `Generateur.generer_reponse` distingue deux chemins tres
+  differents, conformement a l'analyse de la figure 5 de conception_uml_v3.pdf --
+  chemin chiffre (indicateur) : gabarit de texte deterministe, AUCUN LLM, "sans marge
+  d'interpretation sur le chiffre lui-meme" (citation du dossier de conception) ;
+  chemin notion (chunks) : synthese necessitant un vrai LLM, fonction injectable,
+  leve une erreur explicite (pas une reponse inventee) si aucune fonction n'est
+  fournie et que le choix de production n'est pas encore fait. Signature etendue avec
+  un parametre `question` (absent du squelette d'origine) pour que la generation
+  notion reste centree sur la vraie question posee -- ecart mineur documente. 7 tests.
+- `scripts/poser_question.py` (nouveau) : orchestre Routeur -> LookupStructure (si
+  CHIFFRE) -> repli RetrievalReranker si aucun indicateur trouve -> Generateur --
+  implementation concrete des figures 5 et 6. 4 tests bout en bout.
+- Suite de tests complete du projet : 85/85 (52 avant aujourd'hui + 33 Sprint 3).
+- Smoke-test manuel de `scripts.poser_question.main()` contre une base vide : atteint
+  bien le vrai `IndexeurTexte._embarquer`, qui tente de charger BGE-M3 -- absent du
+  sandbox (`ModuleNotFoundError: sentence_transformers`), comportement attendu et deja
+  connu depuis le Sprint 2, confirme que le cablage reel fonctionne jusqu'au bout.
+- Sprint 3 fonctionnellement complet cote code. Reste a valider en conditions reelles
+  sur la machine d'Ayman (vrai bge-reranker-v2-m3, comme BGE-M3 en Sprint 2) et,
+  surtout, a faire trancher par l'encadrante le choix du LLM de generation pour le
+  chemin notion -- le chemin chiffre, lui, fonctionne deja reellement des qu'un
+  indicateur est en base, sans attendre cette decision.

@@ -176,14 +176,37 @@ jointes tout du long.
 **Objectif :** répondre correctement aux deux types de questions, toujours avec source.
 
 Backlog :
-- [ ] Recherche hybride + reranking (`IndexeurTexte.rechercher`, `RetrievalReranker`)
-- [ ] Routeur de question (`Routeur.classifier`)
-- [ ] Lookup structuré (`LookupStructure.rechercher_indicateur`)
-- [ ] Génération avec grounding strict + citation (`Generateur.generer_reponse`)
-- [ ] Tests de bout en bout sur les deux scénarios (question chiffrée / conceptuelle)
+- [x] Routeur de question (`Routeur.classifier`) — heuristique de mots-clés (pas de LLM,
+      voir docstring du module), 11 tests. Signal narratif prioritaire sur signal chiffré
+      (question mixte type "pourquoi le chômage a-t-il augmenté" -> NOTION).
+- [x] Lookup structuré (`LookupStructure.rechercher_indicateur`) — correspondance par
+      recouvrement de tokens contre les noms d'indicateurs réels en base (libellés BDS),
+      extraction région/période, requête SQL exacte, repli si période/région non
+      couverte. 7 tests avec vraie base SQLite et libellés réalistes.
+- [x] Recherche hybride + reranking (`RetrievalReranker`) — cross-encoder
+      `BAAI/bge-reranker-v2-m3` (ADR 0007, cohérent avec BGE-M3/ADR 0002), fonction de
+      reranking injectable pour les tests (4 tests, vrai IndexeurTexte/Chroma/BM25).
+- [x] Génération avec grounding strict + citation (`Generateur.generer_reponse`) —
+      chemin chiffré par gabarit déterministe (aucun LLM requis, conforme à
+      docs/conception_uml_v3.pdf figure 5 : "sans marge d'interprétation sur le
+      chiffre"), chemin notion via fonction de génération LLM injectable (7 tests).
+      **Point ouvert, documenté dans le code** : le choix du LLM de production reste à
+      valider avec l'encadrante (ADR 0002) — sans injection, le chemin notion lève une
+      erreur explicite plutôt que d'inventer une réponse.
+- [x] Script d'orchestration (`scripts/poser_question.py`) reliant Routeur ->
+      LookupStructure/RetrievalReranker -> Generateur, avec repli chiffré -> notion si
+      aucun indicateur exact trouvé. 4 tests bout en bout.
+- [x] Tests de bout en bout sur les deux scénarios (question chiffrée / conceptuelle) —
+      33 nouveaux tests Sprint 3, suite complète du projet : 85/85.
 
 **Definition of done :** les deux diagrammes de séquence (`docs/conception_uml_v3.pdf`,
-figures 5 et 6) fonctionnent réellement en code, sur des vraies données indexées en Sprint 2.
+figures 5 et 6) fonctionnent réellement en code, sur des vraies données indexées en
+Sprint 2. **Fonctionnellement complet côté code** (tests unitaires/intégration avec
+fonctions embedding/reranking/génération factices). **Reste à valider en conditions
+réelles** sur la machine d'Ayman : le vrai cross-encoder `bge-reranker-v2-m3` (comme
+BGE-M3 en Sprint 2), et surtout le chemin notion complet une fois le LLM de production
+choisi avec l'encadrante — sans ce choix, `python -m scripts.poser_question` fonctionne
+déjà réellement pour toute question chiffrée dont l'indicateur est en base.
 
 ---
 
