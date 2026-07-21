@@ -326,7 +326,25 @@ Total : 15 document(s) traite(s), 455 chunk(s) indexe(s).
 \end{Verbatim}
 \end{terminal}
 
-Le mod\`ele BGE-M3, t\'el\'echarg\'e et mis en cache lors du premier test, se charge ici quasi instantan\'ement (pas de nouveau t\'el\'echargement). 8 documents PDF r\'eels indexes sans erreur, 455 chunks au total, filtre de langue toujours actif (4 pi\`eces jointes arabes suppl\'ementaires \'ecart\'ees). Ce lot n'a couvert que la cat\'egorie \'Economie (limite atteinte avant les listings Marché du travail/Population)~: la validation r\'eelle du support DOCX (section~4) reste \`a faire sur un run plus large ou cibl\'e, prochaine \'etape imm\'ediate (voir section~9).
+Le mod\`ele BGE-M3, t\'el\'echarg\'e et mis en cache lors du premier test, se charge ici quasi instantan\'ement (pas de nouveau t\'el\'echargement). 8 documents PDF r\'eels indexes sans erreur, 455 chunks au total, filtre de langue toujours actif (4 pi\`eces jointes arabes suppl\'ementaires \'ecart\'ees). Ce lot n'a couvert que la cat\'egorie \'Economie (limite atteinte avant les listings Marché du travail/Population).
+
+\subsection{Run complet, sans limite~: 151 documents, DOCX valid\'e}
+Ayman a ensuite lanc\'e le script sans \texttt{--limite}, jusqu'\`a son terme, sur les 15 pages listing (\'Economie, March\'e du travail, Population~\&~d\'emographie). Ex\'ecution longue (gros volume, certaines publications comportant plusieurs pi\`eces jointes -- ex. le RGPH~2024 compte \`a lui seul 9 PDF distincts) mais sans aucune erreur bloquante du d\'ebut \`a la fin.
+
+\begin{terminal}[title={PS> python -m scripts.indexer\_documents \ \ (extrait de fin de run)}]
+\begin{Verbatim}
+html  | ignore_html  |   0 chunks | Note sur les resultats de l'enquete nationale sur la migrati
+docx  | ok           |  43 chunks | Note sur les resultats de l'enquete nationale sur la migrati
+pdf   | ok           | 371 chunks | Note sur les resultats de l'enquete nationale sur la migrati
+...
+html  | ignore_html  |   0 chunks | Allocution de Monsieur le Haut-Commissaire au Plan a l'occas
+docx  | ok           |  12 chunks | Allocution de Monsieur le Haut-Commissaire au Plan a l'occas
+...
+Total : 151 document(s) traite(s), 6999 chunk(s) indexe(s).
+\end{Verbatim}
+\end{terminal}
+
+R\'esultat final~: \textbf{151 documents index\'es, 6999 chunks au total}. Point cl\'e~: \textbf{2 vrais fichiers \texttt{.docx}} rencontr\'es et index\'es avec succ\`es (43 et 12 chunks) -- le support DOCX (ADR 0005, section~4) est d\'esormais valid\'e en conditions r\'eelles, pas seulement par les tests avec fixture g\'en\'er\'ee. Plusieurs cas limites r\'eels ont \'et\'e correctement g\'er\'es sans interrompre le run~: liens annonc\'es comme PDF/DOCX mais dont le contenu t\'el\'echarg\'e s'av\`ere invalide (\'ecart\'es via la v\'erification de signature binaire, Sprint~1), et filtre de langue arabe actif de bout en bout, sur les pages comme sur les pi\`eces jointes individuelles.
 
 \section{Limites connues et travail restant}
 \begin{longtable}{@{}p{6cm}p{9cm}@{}}
@@ -334,13 +352,12 @@ Le mod\`ele BGE-M3, t\'el\'echarg\'e et mis en cache lors du premier test, se ch
 \tblhead{Point} & \tblhead{\'Etat} \\
 \midrule
 \endhead
-Validation DOCX en conditions r\'eelles & Le support DOCX (ADR 0005) est impl\'ement\'e et test\'e (fixture g\'en\'er\'ee \`a la vol\'ee), mais pas encore rencontr\'e lors d'une ex\'ecution r\'eelle sur hcp.ma -- les runs effectu\'es \`a ce jour n'ont produit que des PDF. \\
 Inventaire des pages listing \'Economie & Partiel~: Indices des prix et production (IPC/IPPI/IPI/ICE), Secteurs d'activit\'e et Sph\`ere informelle restent \`a v\'erifier et ajouter \`a \texttt{data/listing\_urls.py}. \\
 \texttt{ConstructeurIndicateurs.structurer} & Non impl\'ement\'e (repli PDF/XLSX pour les indicateurs hors catalogue BDS)~: priorit\'e volontairement basse, l'API BDS (ADR 0004) couvre d\'ej\`a la majorit\'e des indicateurs cibl\'es. \\
 \rowcolor{lightgrey} Piste \texttt{hcp.ma/downloads/?tag=X} & D\'ecouverte alternative trouv\'ee (base de t\'el\'echargements filtrable par tag, liens directs) mais volontairement non exploit\'ee -- changement d'architecture plus lourd, \`a discuter dans un \'eventuel ADR ult\'erieur. \\
 \end{longtable}
 
 \section{Transition vers le Sprint 3}
-Le Sprint 2 est fonctionnellement complet c\^ot\'e code, et sa premi\`ere validation en conditions r\'eelles (section~8) confirme que la cha\^ine compl\`ete fonctionne effectivement de bout en bout, avec le vrai mod\`ele BGE-M3 et de vraies publications hcp.ma -- pas seulement en tests avec des composants factices. Reste \`a \'elargir cette validation (couverture DOCX, plus grand volume de documents) avant d'attaquer le Sprint 3~: routage des questions, recherche structur\'ee sur les indicateurs BDS, reranking, et g\'en\'eration de r\'eponse.
+Le Sprint 2 est d\'esormais valid\'e de bout en bout en conditions r\'eelles, et pas seulement fonctionnellement complet c\^ot\'e code~: chunking, embeddings BGE-M3 r\'eels, indexation Chroma/BM25, persistance SQLite, et les trois formats de fichiers cibl\'es (PDF, XLSX, DOCX) tous confirm\'es sur de vraies publications hcp.ma, \`a l'\'echelle (151 documents, 6999 chunks). Le Sprint 3 peut s'ouvrir sur des bases solides~: routage des questions, recherche structur\'ee sur les indicateurs BDS, reranking, et g\'en\'eration de r\'eponse.
 
 \end{document}

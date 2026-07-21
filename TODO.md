@@ -85,7 +85,9 @@ Backlog :
       `Extracteur._extraire_docx` (python-docx) ajouté. `db/schema.sql`/`models.py` mis
       à jour (`type` accepte `'docx'`). 6 nouveaux tests (détection, validation
       xlsx/docx, extraction avec fixture générée à la volée). Suite complète : 16/16.
-      **Reste à valider en conditions réelles** sur un vrai .docx IPC/IPPI téléchargé.
+      **Validé en conditions réelles le 20/07** : run complet `indexer_documents.py`
+      sur les 15 pages listing, 2 vrais fichiers `.docx` rencontrés et indexés avec
+      succès (43 et 12 chunks) — voir section Sprint 2 ci-dessous pour le détail.
 - [x] Découverte automatique des publications (ADR 0006, décidé avec Ayman le 20/07
       après la réunion avec l'encadrante — la liste fixe de 27 URLs ne couvrait ni
       l'historique ni les nouvelles publications) : `Scraper.decouvrir_urls_liste`/
@@ -153,9 +155,19 @@ d'Ayman (`python -m scripts.indexer_documents --limite 3`) — vrai télécharge
 BGE-M3, 1 PDF réel extrait/chunké/indexé (40 chunks), pages HTML et pièces
 jointes arabes correctement écartées. Recherche hybride vérifiée via
 `scripts/inspecter_index.py --recherche "produit intérieur brut"` : embeddings
-dimension 1024 (confirme le vrai modèle), 5/5 résultats pertinents. **Reste** :
-un run plus large pour valider aussi un vrai .docx (IPC/IPPI) — voir tâche DOCX
-ci-dessus.
+dimension 1024 (confirme le vrai modèle), 5/5 résultats pertinents.
+
+**Run complet (sans `--limite`) exécuté le 20/07** : les 15 pages listing
+(Économie, Marché du travail, Population & démographie) parcourues de bout en
+bout. **151 documents indexés, 6999 chunks au total.** Confirme aussi le
+support DOCX en conditions réelles (ADR 0005, tâche déplacée en fait ci-dessus
+et cochée) : 2 vrais fichiers `.docx` rencontrés et indexés avec succès (43 et
+12 chunks). Aucune erreur bloquante sur tout le run ; plusieurs cas limites
+gérés correctement en conditions réelles : liens annoncés PDF/DOCX mais
+contenu invalide (écartés via la vérification de signature binaire, Sprint 1),
+publications à pièces jointes multiples (ex. RGPH 2024 : 9 PDF distincts pour
+une seule publication), filtre de langue arabe actif sur pages et pièces
+jointes tout du long.
 
 ---
 

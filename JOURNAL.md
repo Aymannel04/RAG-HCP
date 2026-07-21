@@ -468,3 +468,29 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - Reste a faire : lancer un run plus large (sans `--limite`, ou avec une limite
   plus haute) pour couvrir aussi un vrai document DOCX (note IPC/IPPI) et valider
   ADR 0005 en conditions reelles (tache #24, toujours en cours).
+
+## 20 juillet 2026 — run complet reel : 151 documents, 6999 chunks, DOCX valide
+
+- Ayman a laisse tourner `python -m scripts.indexer_documents` (sans `--limite`)
+  jusqu'au bout sur les 15 pages listing (Economie, Marche du travail,
+  Population et demographie). Run long (gros volume, plusieurs publications a
+  pieces jointes multiples comme le RGPH 2024 avec 9 PDF distincts) mais aucune
+  erreur bloquante du debut a la fin.
+- Resultat final : **151 documents indexes, 6999 chunks au total**.
+- Validation en conditions reelles du support DOCX (ADR 0005, tache #24,
+  ouverte depuis le Sprint 1) : 2 vrais fichiers `.docx` rencontres et indexes
+  avec succes ("Note sur les resultats de l'enquete nationale sur la
+  migration...", 43 chunks ; "Allocution de Monsieur le Haut-Commissaire au
+  Plan...", 12 chunks). Tache #24 fermee.
+- Plusieurs cas limites reels bien geres, observes dans les logs : liens
+  annonces comme PDF/DOCX mais dont le contenu telecharge n'est pas valide
+  (ecartes via la verification de signature binaire ajoutee en Sprint 1, sans
+  interrompre le run) ; filtre de langue arabe actif tout du long, aussi bien
+  sur des pages article completes (cas deja connu, ADR 0006) que sur des
+  pieces jointes individuelles.
+- Sprint 2 est maintenant valide de bout en bout en conditions reelles, pas
+  seulement fonctionnellement complet cote code : chunking, embeddings BGE-M3
+  reels, indexation Chroma/BM25, persistance SQLite, et desormais les 3 formats
+  de fichiers cibles (PDF, XLSX -- via extraction reelle Sprint 1, DOCX) tous
+  confirmes sur de vraies publications hcp.ma.
+- `docs/rapport_sprint2.pdf`/`.tex` mis a jour avec ce resultat final.
