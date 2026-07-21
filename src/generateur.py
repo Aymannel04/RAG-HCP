@@ -94,13 +94,35 @@ class Generateur:
 
     def _generer_reponse_chiffree(self, indicateur: Indicateur) -> Reponse:
         region = f", {indicateur.region}" if indicateur.region else ""
-        unite = f" {indicateur.unite}" if indicateur.unite else ""
+        unite = self._unite_formatee(indicateur.unite)
         texte = (
             f"D'après les données du HCP, {indicateur.nom} s'élève à "
             f"{indicateur.valeur:g}{unite} pour la période {indicateur.periode}{region}."
         )
         titre, url, date_publication = self._recuperer_document(indicateur.id_document)
         return Reponse(texte=texte, source_url=url, source_titre=titre, source_date=date_publication)
+
+    @staticmethod
+    def _unite_formatee(unite: Optional[str]) -> str:
+        """Met en forme `indicateur.unite` pour un gabarit de phrase.
+
+        Bug reel trouve le 21 juillet 2026 en conditions reelles (indicateur I4001,
+        "Taux de chomage...") : l'API BDS renvoie parfois l'unite en toutes lettres et
+        en MAJUSCULES (ex. "POURCENTAGE"), jamais normalisee nulle part dans le
+        pipeline (`ConstructeurIndicateurs.structurer_depuis_bds` la transmet telle
+        quelle) -- collee directement apres le chiffre, ca donnait "9 POURCENTAGE" au
+        lieu de "9%". Corrige ici plutot que dans `ConstructeurIndicateurs`, pour ne
+        pas modifier la valeur stockee en base (traçabilite : on veut garder la valeur
+        API brute en base, seule sa mise en forme dans une phrase doit changer).
+        """
+        if not unite:
+            return ""
+        nettoye = unite.strip()
+        if nettoye.lower() in {"pourcentage", "pour cent", "percent", "%"}:
+            return "%"
+        if len(nettoye) <= 4:
+            return f" {nettoye}"  # probablement un code court (MAD, USD...), garde tel quel
+        return f" {nettoye.lower()}"
 
     # --- Chemin notion : synthese via LLM injectable ---------------------------------
 

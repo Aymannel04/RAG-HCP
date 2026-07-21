@@ -625,3 +625,30 @@ de stage en fin de période, pas besoin d'être exhaustif.
 - La base contient desormais de vrais indicateurs BDS complets sur les 3 categories :
   next step naturel, tester `LookupStructure`/`Generateur` (chemin chiffre, figure 5)
   en conditions reelles avec ce volume de donnees.
+
+## 21 juillet 2026 (suite 4) — chemin chiffre valide en reel + bug reel corrige (unite BDS)
+
+- `python -m scripts.poser_question "Quel est le taux de chomage actuel ?"` execute
+  en conditions reelles : `Routeur` -> CHIFFRE, `LookupStructure` retrouve le bon
+  indicateur (I4001, "Taux de chomage selon le Milieu, le sexe et le groupe d'ages")
+  et la bonne periode (2025, la plus recente en base), citation source correcte
+  (URL BDS + date). Confirme que la correspondance par recouvrement de tokens
+  (Sprint 3) fonctionne sur de vraies donnees, pas seulement les fixtures de test.
+- Bug reel trouve dans la reponse : "9 POURCENTAGE" au lieu de "9%" -- l'API BDS
+  renvoie l'unite de cet indicateur en toutes lettres et en MAJUSCULES, jamais
+  normalisee nulle part dans le pipeline. Jamais rencontre avant (les tests
+  utilisaient "%" directement, et le seul indicateur teste manuellement en reel
+  avant aujourd'hui, I3181, n'a pas ce probleme).
+- Corrige dans `Generateur._unite_formatee` (nouveau) plutot que dans
+  `ConstructeurIndicateurs` : "pourcentage"/"pour cent"/"percent" -> "%" (sans espace
+  avant) ; unites longues -> minuscules avec espace avant ; codes courts (<=4
+  caracteres, ex. "MAD", "USD") laisses tels quels -- probablement des codes devise/
+  unite a ne pas alterer. Choix deliberе de corriger au moment de l'affichage plutot
+  qu'a la source : la valeur brute de l'API reste inchangee en base (traçabilite).
+  3 nouveaux tests de regression (pourcentage majuscule, unite longue, code court).
+- Suite de tests complete : 91/91.
+- **Sprint 3 desormais valide en conditions reelles sur ses deux scenarios** (figures
+  5 et 6 de docs/conception_uml_v3.pdf), avec tous les composants reels (BGE-M3,
+  bge-reranker-v2-m3, Mistral, API BDS) et un vrai bug de conditions reelles trouve
+  et corrige au passage -- exactement le genre de probleme qu'aucun test avec donnees
+  factices n'aurait pu reveler.

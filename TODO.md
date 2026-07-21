@@ -214,8 +214,14 @@ sans chiffre inventé. Scénario de la figure 6 validé pour de vrai.
 
 `python -m scripts.preremplir_indicateurs_bds` exécuté à pleine échelle le 21/07 :
 **35561 lignes upsertées, 0 échec sur 18 codes** (bien au-delà des tests ponctuels
-précédents) — validation à grande échelle d'ADR 0004. **Reste** : tester le chemin
-chiffré (figure 5) en conditions réelles maintenant que la base est peuplée.
+précédents) — validation à grande échelle d'ADR 0004.
+
+`python -m scripts.poser_question "Quel est le taux de chômage actuel ?"` validé en
+conditions réelles le 21/07 : bon indicateur trouvé, bonne période, source citée
+correctement. Bug réel trouvé et corrigé au passage : unité BDS renvoyée en
+majuscules ("POURCENTAGE") jamais normalisée — `Generateur._unite_formatee` ajouté,
+3 tests de régression. **Sprint 3 validé en conditions réelles sur ses deux
+scénarios** (figures 5 et 6). Suite complète : 91/91.
 
 ---
 

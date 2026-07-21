@@ -52,9 +52,46 @@ def test_generer_reponse_indicateur_ne_necessite_aucun_llm(conn, id_document):
     reponse = generateur.generer_reponse("Quel est le taux de chômage ?", indicateur)
 
     assert "13.3" in reponse.texte
+    assert "13.3%" in reponse.texte  # pas d'espace avant % (voir _unite_formatee)
     assert "Taux de chômage" in reponse.texte
     assert "2024T2" in reponse.texte
     assert reponse.source_url == "https://bds.hcp.ma/main/indicators/I4001"
+
+
+def test_generer_reponse_indicateur_normalise_unite_pourcentage_en_majuscules(conn, id_document):
+    # Regression : bug reel trouve le 21 juillet 2026 sur I4001 -- l'API BDS renvoie
+    # parfois l'unite en toutes lettres et en majuscules ("POURCENTAGE"), ce qui
+    # donnait "9 POURCENTAGE" au lieu de "9%" avant la correction.
+    generateur = Generateur(conn)
+    indicateur = Indicateur(
+        id_indicateur=1, nom="Taux de chômage", valeur=9.0, unite="POURCENTAGE",
+        periode="2025", region=None, id_document=id_document, code_bds="I4001",
+    )
+    reponse = generateur.generer_reponse("Quel est le taux de chômage ?", indicateur)
+
+    assert "9%" in reponse.texte
+    assert "POURCENTAGE" not in reponse.texte
+
+
+def test_generer_reponse_indicateur_unite_longue_est_mise_en_minuscules(conn, id_document):
+    generateur = Generateur(conn)
+    indicateur = Indicateur(
+        id_indicateur=1, nom="Population", valeur=37000.0, unite="MILLIERS",
+        periode="2024", region=None, id_document=id_document,
+    )
+    reponse = generateur.generer_reponse("Question", indicateur)
+    assert "37000 milliers" in reponse.texte
+    assert "MILLIERS" not in reponse.texte
+
+
+def test_generer_reponse_indicateur_unite_code_court_reste_telle_quelle(conn, id_document):
+    generateur = Generateur(conn)
+    indicateur = Indicateur(
+        id_indicateur=1, nom="Test", valeur=1.0, unite="MAD",
+        periode="2024", region=None, id_document=id_document,
+    )
+    reponse = generateur.generer_reponse("Question", indicateur)
+    assert "1 MAD" in reponse.texte
     assert reponse.source_titre == "Taux de chômage"
     assert reponse.source_date == "2026-06-01"
 
