@@ -31,3 +31,19 @@ Thumbs.db
 
 # Extraits generes localement par les scripts de test (contenu volumineux, regenerable)
 scripts/extraits/
+
+# Documents personnels (échanges/rapports d'avancement avec l'encadrante, envoyés
+# par mail) : gardés en local uniquement, jamais dans le dépôt public.
+docs/rapport_sprint1.tex
+docs/rapport_sprint1.pdf
+docs/rapport_sprint2.tex
+docs/rapport_sprint2.pdf
+docs/note_stockage_routage_benchmark.tex
+docs/note_stockage_routage_benchmark.pdf
+docs/guide_sprint2_sprint3.md
+docs/synthese_sprint2_sprint3.tex
+docs/synthese_sprint2_sprint3.pdf
+docs/catalogue_projet.md
+docs/catalogue_projet.tex
+docs/catalogue_projet.pdf
+docs/presentations/

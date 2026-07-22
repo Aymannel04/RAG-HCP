@@ -14,8 +14,8 @@ Pour chacune des 27 URLs de data/seed_urls.py :
 
 Resultat : un fichier .txt lisible par document dans scripts/extraits/ (un nom de
 fichier distinct par document, meme si plusieurs partagent le titre de la page parente —
-correction du 15 juillet : avant, un PDF et sa page HTML parente pouvaient s'ecraser l'un
-l'autre car ils recevaient le meme nom de fichier).
+un PDF et sa page HTML parente ne doivent pas s'ecraser l'un l'autre en recevant le
+meme nom de fichier).
 
 A la fin : un resume par type (html/pdf/xlsx) pour voir d'un coup d'oeil combien de
 pieces jointes ont ete trouvees et avec quel contenu.
