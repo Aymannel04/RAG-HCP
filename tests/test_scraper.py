@@ -47,14 +47,14 @@ def test_collecter_renvoie_un_document(mock_get):
 # --- Regression : sur-detection de pieces jointes ---------------------------------
 #
 # Une sur-detection (liens de menu/sidebar pris a tort pour des pieces jointes) avait
-# ete suspectee lors des premiers tests reels (voir rapport_sprint1.pdf). Verifiee le
-# 17 juillet 2026 avec du vrai HTML reconstruit a partir de 4 pages hcp.ma recuperees
-# via web_fetch (note de conjoncture, rapport d'enquete, page RGPH regionale a 8
-# fichiers, bulletin trimestriel emploi) : sur ces 4 pages (338 liens <a> au total,
-# menus + sidebar + pied de page inclus), 0 faux positif et 0 faux negatif. Les deux
-# fixtures ci-dessous reproduisent les deux cas limites observes : un menu tres charge
-# autour d'une seule vraie piece jointe, et une page a plusieurs pieces jointes reelles
-# (qui ne doivent pas etre confondues avec de la sur-detection).
+# ete suspectee lors des premiers tests reels (voir rapport_sprint1.pdf). Verifiee avec
+# du vrai HTML reconstruit a partir de 4 pages hcp.ma reelles (note de conjoncture,
+# rapport d'enquete, page RGPH regionale a 8 fichiers, bulletin trimestriel emploi) :
+# sur ces 4 pages (338 liens <a> au total, menus + sidebar + pied de page inclus),
+# 0 faux positif et 0 faux negatif. Les deux fixtures ci-dessous reproduisent les deux
+# cas limites observes : un menu tres charge autour d'une seule vraie piece jointe, et
+# une page a plusieurs pieces jointes reelles (qui ne doivent pas etre confondues avec
+# de la sur-detection).
 
 MENU_HCP_TYPE = """
 <a href="https://www.hcp.ma/plugin/">Rechercher</a>
@@ -110,10 +110,10 @@ def test_detecter_pieces_jointes_plusieurs_vraies_pieces_jointes_pas_confondu_av
 
 # --- ADR 0005 : support DOCX --------------------------------------------------------
 #
-# Decouvert le 17 juillet 2026 : les pages IPC/IPPI (categorie Economie) ne publient
-# leur note mensuelle qu'en .docx, jamais en PDF/XLSX. Href sans extension visible
-# (/attachment/{id}/), extension uniquement dans le texte du lien — meme schema que les
-# PDF/XLSX. Fixture reconstruite depuis la vraie page IPC Mai 2026.
+# Les pages IPC/IPPI (categorie Economie) ne publient leur note mensuelle qu'en .docx,
+# jamais en PDF/XLSX. Href sans extension visible (/attachment/{id}/), extension
+# uniquement dans le texte du lien — meme schema que les PDF/XLSX. Fixture reconstruite
+# depuis la vraie page IPC Mai 2026.
 
 def test_detecter_pieces_jointes_reconnait_le_docx():
     html = (
@@ -158,7 +158,7 @@ def test_nom_fichier_piece_gere_extension_docx():
 
 # --- ADR 0006 : decouverte automatique des publications -----------------------------
 #
-# Verifie le 20 juillet 2026 en reel sur https://www.hcp.ma/Publications-Marche-du-travail_r425.html
+# Verifie en reel sur https://www.hcp.ma/Publications-Marche-du-travail_r425.html
 # (50 publications, 10 pages de 5, pagination ?start=0..45). Fixtures reconstruites a
 # partir de cette page reelle et du menu HCP_TYPE deja utilise plus haut (regression :
 # le menu ne doit produire aucun faux positif sur le motif d'URL d'article).
@@ -208,10 +208,10 @@ def test_extraire_urls_articles_deduplique_lien_titre_et_lire_la_suite():
 
 # --- ADR 0006, suite : filtrage des versions arabes ---------------------------------
 #
-# Trouve en conditions reelles le 20 juillet 2026 (premiere execution du script par
-# Ayman) : la decouverte automatique remonte aussi des versions arabes d'articles, qui
-# n'apparaissaient jamais dans l'ancienne liste fixe (URLs choisies a la main en
-# francais). Fixture reconstruite depuis le vrai cas trouve :
+# Trouve en conditions reelles (premiere execution du script) : la decouverte
+# automatique remonte aussi des versions arabes d'articles, qui n'apparaissaient
+# jamais dans l'ancienne liste fixe (URLs choisies a la main en francais). Fixture
+# reconstruite depuis le vrai cas trouve :
 # https://www.hcp.ma/Situation-du-marche-du-travail-dans-la-region-de-Rabat-Sale-Kenitra-en-2024-version-Ar_a4217.html
 # titre reel du lien : "Situation du marché du travail dans la région de
 # Rabat - Salé - Kénitra en 2024 (version Ar)".

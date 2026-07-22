@@ -7,9 +7,8 @@ C'est ce module qui élimine le risque d'hallucination sur les chiffres officiel
 libre n'intervient ici, seulement une requête SQL exacte sur des données déjà en base
 (pré-remplies par scripts/preremplir_indicateurs_bds.py, ADR 0004).
 
-Décisions d'implémentation (Sprint 3, 21 juillet 2026), aucune fixée dans les documents
-de conception (qui décrivent la responsabilité du module mais pas l'algorithme de
-correspondance question -> indicateur) :
+Décisions d'implémentation, aucune fixée dans les documents de conception (qui décrivent
+la responsabilité du module mais pas l'algorithme de correspondance question -> indicateur) :
 
 - Correspondance par recouvrement de tokens entre la question et les valeurs distinctes
   de `indicateur.nom` déjà en base (même famille de technique que la tokenisation BM25
@@ -42,10 +41,10 @@ from .models import Indicateur
 
 def _normaliser_accents(texte: str) -> str:
     """Retire les diacritiques (ex. "chômage" -> "chomage"), pour tolerer les
-    questions tapees sans accents -- frequent en usage reel (voir test reel du
-    21 juillet 2026 : "quel est le taux de chomage" sans accent ne correspondait pas
-    a "chômage" en base, faisait basculer a tort sur RetrievalReranker au lieu de la
-    reponse structuree exacte, contraire au principe fondateur ADR 0001)."""
+    questions tapees sans accents -- frequent en usage reel (sans normalisation,
+    "quel est le taux de chomage" sans accent ne correspond pas a "chômage" en
+    base, ce qui fait basculer a tort sur RetrievalReranker au lieu de la reponse
+    structuree exacte, contraire au principe fondateur ADR 0001)."""
     forme_decomposee = unicodedata.normalize("NFD", texte)
     return "".join(c for c in forme_decomposee if unicodedata.category(c) != "Mn")
 
@@ -134,19 +133,18 @@ class LookupStructure:
         """Trouve le nom d'indicateur le plus proche de la question par recouvrement
         de tokens, ou None si aucune correspondance n'est assez fiable.
 
-        Bug reel trouve le 21 juillet 2026 (question "Quel est le taux de travail ?") :
-        presque tous les noms d'indicateurs BDS commencent par "Taux" -- avec le seul
-        mot "taux" en commun, quasiment tous les indicateurs de la base decrochaient
-        le meme score (1), et le tie-break (premier insere) choisissait arbitrairement
-        "Taux d'urbanisation" a la place de "Taux net d'activite"/"Taux d'emploi" (plus
-        pertinents), avec une reponse presentee comme sure d'elle. Corrige en refusant
-        tout match ambigu : si plusieurs noms sont a egalite sur le meilleur score ET
-        que ce score ne repose que sur un seul mot partage (typiquement "taux" seul),
-        on renvoie None plutot que de trancher au hasard -- le Routeur bascule alors
-        sur RetrievalReranker (voir scripts/poser_question.py), plus honnete qu'une
-        valeur chiffree associee au mauvais indicateur. Un score de 1 SANS ambiguite
-        (un seul nom candidat, ex. correspondance sur un mot distinctif comme
-        "urbanisation") reste accepte.
+        Presque tous les noms d'indicateurs BDS commencent par "Taux" -- avec le seul
+        mot "taux" en commun, une question comme "Quel est le taux de travail ?" fait
+        decrocher le meme score (1) a quasiment tous les indicateurs de la base, et un
+        simple tie-break (premier insere) choisirait arbitrairement un indicateur non
+        pertinent avec une reponse presentee comme sure d'elle. D'ou le refus de tout
+        match ambigu : si plusieurs noms sont a egalite sur le meilleur score ET que ce
+        score ne repose que sur un seul mot partage (typiquement "taux" seul), on
+        renvoie None plutot que de trancher au hasard -- le Routeur bascule alors sur
+        RetrievalReranker (voir scripts/poser_question.py), plus honnete qu'une valeur
+        chiffree associee au mauvais indicateur. Un score de 1 SANS ambiguite (un seul
+        nom candidat, ex. correspondance sur un mot distinctif comme "urbanisation")
+        reste accepte.
         """
         tokens_question = cls._tokeniser(question)
         if not tokens_question:

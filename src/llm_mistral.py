@@ -2,27 +2,17 @@
 Client Mistral pour le chemin "notion" de Generateur (voir src/generateur.py,
 `TypeFonctionGeneration`).
 
-Choix du LLM de production (Sprint 3, 21 juillet 2026) : l'encadrante a validé
-« n'importe quel LLM gratuit qui fait le travail » pour la phase prototype -- ce qui
-lève le point bloquant de l'ADR 0002. Mistral retenu parmi les options gratuites
-comparées (Google Gemini, Groq, Mistral) pour deux raisons : qualité du français
+LLM de production choisi pour la phase prototype (voir ADR 0002) : Mistral, retenu
+parmi les options gratuites (Google Gemini, Groq, Mistral) pour la qualité du français
 (acteur français, entraînement fortement francophone -- pertinent pour restituer des
-publications administratives/statistiques marocaines en français) et cohérence (un
-choix plus simple à justifier auprès de l'encadrante qu'un modèle généraliste
-anglophone quelconque). Tier gratuit "Experiment" (~1 milliard de tokens/mois) en
-échange d'un opt-in à l'entraînement -- accepté explicitement par Ayman le 21 juillet
-car les documents indexés sont déjà des publications publiques du HCP, aucune donnée
-sensible n'est en jeu.
+publications administratives/statistiques marocaines en français). Tier gratuit
+"Experiment" (~1 milliard de tokens/mois) en échange d'un opt-in à l'entraînement,
+acceptable ici car les documents indexés sont déjà des publications publiques du HCP.
 
 Nécessite une clé API gratuite (https://console.mistral.ai/), à placer dans un fichier
 `.env` à la racine du projet (jamais commité, voir .gitignore) :
 
     MISTRAL_API_KEY=...
-
-Statut : implémenté. PAS ENCORE testé contre la vraie API (pas d'accès réseau dans ce
-bac à sable de développement, même limite que hcp.ma/BDS/BGE-M3) -- testé avec
-`requests.post` simulé (voir tests/test_llm_mistral.py, même patron que
-tests/test_scraper.py). À valider sur la machine d'Ayman une fois la clé API créée.
 """
 from __future__ import annotations
 

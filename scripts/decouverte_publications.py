@@ -17,9 +17,8 @@ Deux modes, meme mecanisme (Scraper.collecter_depuis_listing), portee differente
         plus ancien, donc toute nouvelle publication apparait forcement en page 1.
 
 Dans les deux cas, aucune deduplication n'est geree ici : elle repose sur la contrainte
-`document.url UNIQUE` de db/schema.sql au moment de l'insertion en base (le script
-d'insertion reste a ecrire, voir TODO.md Sprint 2 -- meme limite que
-preremplir_indicateurs_bds.py actuellement).
+`document.url UNIQUE` de db/schema.sql au moment de l'insertion en base (voir
+scripts/indexer_documents.py).
 
 A executer sur le PC, pas dans le bac a sable de developpement (pas d'acces reseau vers
 hcp.ma depuis ce sandbox) -- meme situation que scripts/valider_docx_reel.py.

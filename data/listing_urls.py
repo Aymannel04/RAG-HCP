@@ -8,10 +8,9 @@ Different de data/seed_urls.py : seed_urls.py liste des URLS D'ARTICLES precises
 test rapide et cible) ; ce fichier liste des URLS DE LISTING (des pages qui, elles,
 contiennent des liens vers de nombreux articles, avec pagination).
 
-Inventaire complete le 20 juillet 2026 en parcourant les pages de rubrique reelles de
-hcp.ma (breadcrumb "Publications" de chaque sous-theme, verifie via web_fetch). Constat :
-chaque sous-theme (pas la categorie mere) a sa propre page "Publications-<sous-theme>",
-sauf exception notee ci-dessous.
+Inventaire etabli en parcourant les pages de rubrique reelles de hcp.ma (breadcrumb
+"Publications" de chaque sous-theme). Constat : chaque sous-theme (pas la categorie
+mere) a sa propre page "Publications-<sous-theme>", sauf exception notee ci-dessous.
 
 Usage prevu (a executer sur le PC, pas dans ce sandbox qui n'a pas d'acces reseau vers
 hcp.ma) :
@@ -25,8 +24,8 @@ hcp.ma) :
         for url_listing in listings:
             tous_documents += scraper.collecter_depuis_listing(url_listing, categorie=categorie)
 
-Autre piste trouvee le 20 juillet mais volontairement pas utilisee ici (changement plus
-lourd, discute avec Ayman avant d'y toucher) : hcp.ma/downloads/?tag=<categorie> est une
+Autre piste identifiee mais volontairement pas utilisee ici (changement plus lourd,
+a discuter avant d'y toucher) : hcp.ma/downloads/?tag=<categorie> est une
 base de telechargements distincte, filtrable par tag, qui donne directement les liens de
 fichiers (PDF/XLSX) avec titre/date, sans passer par la page HTML de l'article. Elle
 pourrait remplacer tout ce mecanisme mais n'a pas ete validee (pagination, fiabilite) --
@@ -34,36 +33,36 @@ a explorer dans un ADR ulterieur si retenue.
 """
 
 # --- Economie -------------------------------------------------------------------------
-# Verifie le 20 juillet 2026 : 3 sous-themes sur 6 confirmes avec leur propre page
-# "Publications-X". "Indices des prix et production" (r343) est lui-meme un regroupement
-# de 4 sous-sous-themes (IPC, IPPI, IPI, ICE — voir ADR 0005, DOCX) sans page Publications
-# a lui : chacun de ses 4 enfants a probablement sa propre page, pas encore verifiee.
-# "Secteurs d'activite" et "Sphere informelle" pas encore verifies non plus.
+# 3 sous-themes sur 6 confirmes avec leur propre page "Publications-X". "Indices des
+# prix et production" (r343) est lui-meme un regroupement de 4 sous-sous-themes (IPC,
+# IPPI, IPI, ICE — voir ADR 0005, DOCX) sans page Publications a lui : chacun de ses
+# 4 enfants a probablement sa propre page, pas encore verifiee. "Secteurs d'activite"
+# et "Sphere informelle" pas encore verifies non plus.
 URLS_LISTING_ECONOMIE = [
     "https://www.hcp.ma/Publications-Comptes-nationaux_r340.html",
     "https://www.hcp.ma/Publications-Conjoncture-et-prevision-economique_r330.html",
     "https://www.hcp.ma/Publications-Conjoncture-entreprise_r622.html",
     # "Etudes economiques" : page distincte (pas un sous-theme du menu), 25 publications
-    # sur 5 pages, verifiee le 20 juillet 2026. Gardee car elle couvre du contenu qui
-    # n'apparait dans aucun des 3 listings ci-dessus.
+    # sur 5 pages. Gardee car elle couvre du contenu qui n'apparait dans aucun des
+    # 3 listings ci-dessus.
     "https://www.hcp.ma/Etudes-economiques_r650.html",
     # A completer : Indices-des-prix-et-production (et ses 4 enfants IPC/IPPI/IPI/ICE),
     # Secteurs-d-activite_r363, Sphere-informelle_r418.
 ]
 
 URLS_LISTING_MARCHE_DU_TRAVAIL = [
-    # Confirme le 20 juillet 2026 : couvre a elle seule les 3 sous-themes (Activite,
-    # Emploi, Chomage) -- 50 publications, 10 pages. Cas particulier : contrairement a
-    # Economie/Population, Marche du travail a UNE SEULE page agregee pour toute la
-    # categorie plutot qu'une page par sous-theme.
+    # Couvre a elle seule les 3 sous-themes (Activite, Emploi, Chomage) -- 50
+    # publications, 10 pages. Cas particulier : contrairement a Economie/Population,
+    # Marche du travail a UNE SEULE page agregee pour toute la categorie plutot
+    # qu'une page par sous-theme.
     "https://www.hcp.ma/Publications-Marche-du-travail_r425.html",
 ]
 
 # --- Population & demographie ----------------------------------------------------------
-# Inventaire complet (10/10 sous-themes) verifie le 20 juillet 2026. Contrairement a
-# Marche du travail, il n'existe PAS de page "Publications-Population-demographie"
-# agregee (verifie : la page existe mais est vide, r515.html) -- chaque sous-theme a
-# sa propre page, il faut TOUTES les donner au Scraper pour couvrir la categorie.
+# Inventaire complet (10/10 sous-themes). Contrairement a Marche du travail, il n'existe
+# PAS de page "Publications-Population-demographie" agregee (verifie : la page existe
+# mais est vide, r515.html) -- chaque sous-theme a sa propre page, il faut TOUTES les
+# donner au Scraper pour couvrir la categorie.
 URLS_LISTING_POPULATION_DEMOGRAPHIE = [
     "https://www.hcp.ma/Publications-Recensement-general-RGPH_r520.html",
     "https://www.hcp.ma/Publications-Structure-de-la-population_r525.html",

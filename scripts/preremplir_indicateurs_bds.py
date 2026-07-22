@@ -3,12 +3,11 @@ Script de pré-remplissage des indicateurs curés depuis l'API BDS (figure B du
 complément de conception, docs/complement_conception_bds.pdf : étape 1 de la
 stratégie cache-aside décidée dans l'ADR 0004).
 
-Fait maintenant le vrai upsert en base SQLite (voir src/base_donnees.py, écrit le
-20 juillet 2026 — Sprint 2, "Script d'insertion en base") : pour chaque code, insère
-(ou retrouve) le document synthétique associé, puis upsert chaque ligne d'indicateur
-sur (nom, periode, region, code_bds) — une ré-exécution (ex. tâche planifiée
-nocturne, voir ADR 0004) met à jour les valeurs révisées plutôt que d'empiler des
-doublons.
+Fait le vrai upsert en base SQLite (voir src/base_donnees.py) : pour chaque code,
+insère (ou retrouve) le document synthétique associé, puis upsert chaque ligne
+d'indicateur sur (nom, periode, region, code_bds) — une ré-exécution (ex. tâche
+planifiée nocturne, voir ADR 0004) met à jour les valeurs révisées plutôt que
+d'empiler des doublons.
 
 Usage : python -m scripts.preremplir_indicateurs_bds [chemin_db]
 """

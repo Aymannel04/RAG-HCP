@@ -4,18 +4,10 @@ Role : nettoyer chaque type de document collecte (HTML, PDF, XLSX, DOCX) et sepa
 texte narratif et tableaux de chiffres (voir docs/fiche_cadrage_v4.pdf, section 8.1,
 ADR 0003 sur l'ingestion PDF/XLSX, et ADR 0005 sur l'extension au DOCX).
 
-Statut :
-- HTML : fonctionnel, mais la strategie "tous les <p>, tous les <table>" s'est revelee
-  insuffisante sur un vrai gabarit hcp.ma (menus rendus en <table>, corps d'article pas
-  toujours dans des <p>) — a retravailler une fois qu'on aura un extrait de HTML reel
-  (voir echange du 15 juillet 2026). De toute facon jamais indexe (ADR 0003).
-- PDF : implemente avec pdfplumber. Valide en reel le 17 juillet 2026 sur 30 vrais PDF
-  hcp.ma (texte + tableaux coherents, aucune erreur). 2 gros PDF tres denses en tableaux
-  restent lents (>40s) — a surveiller si ca devient un probleme en indexation par lot.
-- XLSX : implemente avec openpyxl. PAS ENCORE teste sur un vrai fichier hcp.ma (aucun
-  exemplaire trouve a ce jour sur les pages seed).
-- DOCX : implemente avec python-docx (ADR 0005, 17 juillet 2026). PAS ENCORE teste sur
-  un vrai fichier hcp.ma (ex. notes IPC/IPPI) — prochaine etape.
+L'extraction HTML n'est jamais indexee (ADR 0003 : le RAG s'appuie exclusivement sur
+les pieces jointes PDF/XLSX/DOCX), conservee uniquement pour la retro-compatibilite du
+chemin de code. PDF (pdfplumber), XLSX (openpyxl) et DOCX (python-docx) sont les trois
+formats reellement exploites par le pipeline d'indexation.
 """
 from __future__ import annotations
 

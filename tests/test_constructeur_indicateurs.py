@@ -1,8 +1,8 @@
 """
 Tests du module ConstructeurIndicateurs (chemin API BDS). Le JSON mock ci-dessous
 reproduit en miniature la forme réelle observée sur `GET /api/v1/indicators/I3181`
-(vérifiée par appel réel le 16-17 juillet 2026, voir docs/adr/0004-*.md) : deux
-modalités de ventilation, deux périodes, une valeur manquante ("ND") à ignorer.
+(vérifiée par appel réel, voir docs/adr/0004-*.md) : deux modalités de ventilation,
+deux périodes, une valeur manquante ("ND") à ignorer.
 """
 from src.constructeur_indicateurs import ConstructeurIndicateurs
 
@@ -71,9 +71,9 @@ def test_structurer_depuis_bds_sans_dimension_utilise_juste_la_periode():
 
 
 def test_structurer_depuis_bds_gere_dimensions_null():
-    # Bug reel trouve le 17 juillet 2026 sur I2790 "Taux d'urbanisation" : l'API renvoie
-    # "dimensions": null (pas []) quand l'indicateur n'a pas de ventilation. dict.get(cle, [])
-    # ne rattrape pas ce cas car la cle EST presente (juste avec une valeur null).
+    # Cas reel observe sur I2790 "Taux d'urbanisation" : l'API renvoie "dimensions": null
+    # (pas []) quand l'indicateur n'a pas de ventilation. dict.get(cle, []) ne rattrape
+    # pas ce cas car la cle EST presente (juste avec une valeur null).
     json_sans_dimension = {
         "code": "I2790",
         "label": "Taux d'urbanisation",

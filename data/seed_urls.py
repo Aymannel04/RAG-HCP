@@ -1,8 +1,8 @@
 """
 Liste d'URLs de depart pour le premier test reel du Scraper (Sprint 1, TODO.md).
 
-Compilee manuellement le 15 juillet 2026 en parcourant les pages de rubrique de hcp.ma
-pour les 3 categories ciblees par la fiche de cadrage (docs/fiche_cadrage_v4.pdf, section 5) :
+Compilee manuellement en parcourant les pages de rubrique de hcp.ma pour les
+3 categories ciblees par la fiche de cadrage (docs/fiche_cadrage_v4.pdf, section 5) :
 Economie, Marche du travail, Population & demographie.
 
 Usage prevu (a executer sur le PC, pas dans ce sandbox qui n'a pas d'acces reseau vers

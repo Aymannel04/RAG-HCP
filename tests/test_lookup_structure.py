@@ -74,9 +74,9 @@ def test_rechercher_indicateur_discrimine_activite_vs_emploi(conn):
 
 
 def test_rechercher_indicateur_match_ambigu_sur_taux_seul_renvoie_none(conn):
-    # Regression : bug reel du 21 juillet 2026, "Quel est le taux de travail ?" ne
-    # partage que le mot "taux" avec presque tous les indicateurs de la base --
-    # aucun n'est assez distinctif pour etre choisi avec confiance.
+    # Regression : "Quel est le taux de travail ?" ne partage que le mot "taux" avec
+    # presque tous les indicateurs de la base -- aucun n'est assez distinctif pour
+    # etre choisi avec confiance.
     _peupler_indicateurs_realistes(conn)
     resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de travail ?")
     assert resultat is None
@@ -91,9 +91,9 @@ def test_rechercher_indicateur_mot_distinctif_unique_reste_accepte(conn):
 
 
 def test_rechercher_indicateur_sans_accents_matche_quand_meme(conn):
-    # Regression : bug reel du 21 juillet 2026, "chomage" tape sans accent ne
-    # correspondait pas a "chômage" en base -- faisait basculer a tort sur
-    # RetrievalReranker au lieu de la reponse structuree exacte.
+    # Regression : "chomage" tape sans accent ne correspondait pas a "chômage" en
+    # base -- faisait basculer a tort sur RetrievalReranker au lieu de la reponse
+    # structuree exacte.
     _peupler_indicateurs_realistes(conn)
     resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de chomage pour les femmes")
     assert resultat is not None

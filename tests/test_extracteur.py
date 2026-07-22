@@ -25,9 +25,8 @@ def test_extraire_separe_texte_et_tableaux():
 
 
 def test_extraire_docx_separe_texte_et_tableaux(tmp_path):
-    # ADR 0005 : support DOCX (pages IPC/IPPI decouvertes le 17 juillet 2026, qui ne
-    # publient qu'en .docx). Fixture generee a la volee avec python-docx, pas de
-    # fichier externe necessaire.
+    # ADR 0005 : support DOCX (pages IPC/IPPI, qui ne publient qu'en .docx). Fixture
+    # generee a la volee avec python-docx, pas de fichier externe necessaire.
     from docx import Document as DocxDocument
 
     docx = DocxDocument()

@@ -3,7 +3,7 @@ Module Generateur — module 8 de l'architecture.
 Rôle : rédiger la réponse en langage naturel, toujours accompagnée de sa source
 (document, date, lien) — grounding strict, jamais de chiffre hors contexte fourni.
 
-Décisions d'implémentation (Sprint 3, 21 juillet 2026) :
+Décisions d'implémentation :
 
 - **Chemin chiffré (contexte = Indicateur) : pas de LLM du tout.** D'après
   docs/conception_uml_v3.pdf (analyse de la figure 5) : « le Generateur n'intervient
@@ -13,16 +13,12 @@ Décisions d'implémentation (Sprint 3, 21 juillet 2026) :
   chemin, et zéro dépendance au choix du LLM (voir point suivant).
 - **Chemin notion (contexte = list[Chunk]) : LLM injectable, requis.** Contrairement au
   chemin chiffré, synthétiser plusieurs passages en une réponse cohérente nécessite une
-  vraie génération de texte. Le choix du LLM de production (API externe vs modèle
-  open-weight hébergé localement) reste une décision ouverte -- voir
-  docs/adr/0002-stack-technique-prototype.md, "point réellement bloquant... doit être
-  validé avec l'encadrante". Plutôt que d'attendre cette validation pour avancer le
-  Sprint 3, `fonction_generation` est injectable au constructeur (même patron que
-  `IndexeurTexte._embarquer` pour BGE-M3 en Sprint 2) : toute la logique de grounding,
-  de citation de source et de gestion du cas "pas d'information" est déjà écrite et
-  testée, il ne restera qu'à câbler le vrai appel LLM une fois le choix arrêté. Sans
-  fonction injectée, `generer_reponse` lève une erreur explicite plutôt que d'inventer
-  un texte ou de faire semblant de fonctionner.
+  vraie génération de texte. `fonction_generation` est injectable au constructeur (même
+  patron que `IndexeurTexte._embarquer` pour BGE-M3) : toute la logique de grounding, de
+  citation de source et de gestion du cas "pas d'information" est indépendante du LLM
+  branché (voir `src/llm_mistral.py` pour l'implémentation de production, ADR 0002). Sans
+  fonction injectée, `generer_reponse` lève une erreur explicite plutôt que d'inventer un
+  texte ou de faire semblant de fonctionner.
 - **Signature étendue par rapport au squelette d'origine** (`generer_reponse(contexte)`
   sans `question`) : la question est nécessaire pour que la génération LLM du chemin
   notion reste réellement centrée sur ce qui a été demandé plutôt que de résumer les
@@ -32,8 +28,6 @@ Décisions d'implémentation (Sprint 3, 21 juillet 2026) :
   -- nécessaires pour la citation (exigence NF3, traçabilité). Même patron que
   `LookupStructure(conn)`.
 
-Statut : implémenté (chemin chiffré complet et testé sans dépendance externe ; chemin
-notion testé avec une fonction de génération factice -- le vrai LLM reste à choisir).
 """
 from __future__ import annotations
 
@@ -106,13 +100,12 @@ class Generateur:
     def _unite_formatee(unite: Optional[str]) -> str:
         """Met en forme `indicateur.unite` pour un gabarit de phrase.
 
-        Bug reel trouve le 21 juillet 2026 en conditions reelles (indicateur I4001,
-        "Taux de chomage...") : l'API BDS renvoie parfois l'unite en toutes lettres et
-        en MAJUSCULES (ex. "POURCENTAGE"), jamais normalisee nulle part dans le
-        pipeline (`ConstructeurIndicateurs.structurer_depuis_bds` la transmet telle
-        quelle) -- collee directement apres le chiffre, ca donnait "9 POURCENTAGE" au
-        lieu de "9%". Corrige ici plutot que dans `ConstructeurIndicateurs`, pour ne
-        pas modifier la valeur stockee en base (traçabilite : on veut garder la valeur
+        L'API BDS renvoie parfois l'unite en toutes lettres et en MAJUSCULES (ex.
+        "POURCENTAGE"), jamais normalisee nulle part dans le pipeline
+        (`ConstructeurIndicateurs.structurer_depuis_bds` la transmet telle quelle) --
+        collee directement apres le chiffre, ca donnerait "9 POURCENTAGE" au lieu de
+        "9%". Corrige ici plutot que dans `ConstructeurIndicateurs`, pour ne pas
+        modifier la valeur stockee en base (traçabilite : on veut garder la valeur
         API brute en base, seule sa mise en forme dans une phrase doit changer).
         """
         if not unite:
@@ -129,12 +122,10 @@ class Generateur:
     def _generer_reponse_notion(self, question: str, chunks: list[Chunk]) -> Reponse:
         if self._fonction_generation is None:
             raise NotImplementedError(
-                "Aucune fonction de generation configuree : le choix du LLM de "
-                "production (API externe vs modele open-weight local) reste a valider "
-                "avec l'encadrante (voir ADR 0002). Injecter `fonction_generation` au "
-                "constructeur de Generateur (voir docstring de module) -- pour un test "
-                "rapide sans attendre cette decision, une fonction factice suffit, "
-                "meme patron que IndexeurTexte en Sprint 2."
+                "Aucune fonction de generation LLM configuree : injecter "
+                "`fonction_generation` au constructeur de Generateur (voir docstring "
+                "de module -- `src/llm_mistral.py` pour la production, ou une "
+                "fonction factice pour les tests)."
             )
 
         texte_contexte = "\n\n".join(chunk.texte for chunk in chunks)

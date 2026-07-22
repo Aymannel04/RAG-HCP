@@ -5,7 +5,7 @@ Rôle : chunking, calcul des embeddings, indexation vectorielle + BM25, recherch
 Décisions prises ici, non fixées dans les docs de conception (fiche_cadrage_v4.pdf §8.1 et
 conception_uml_v3.pdf §8 demandent un chunking « respectant la structure des documents » et
 une « recherche hybride dense + BM25 », sans donner de taille de chunk, d'overlap, ni de
-formule de fusion des scores — vérifié le 20 juillet 2026 en relisant les deux documents) :
+formule de fusion des scores) :
 
 - Chunking par paragraphe avec empaquetage glouton (voir `_decouper_en_chunks`) : taille
   cible ~1500 caractères (~300-400 tokens en français), chevauchement ~200 caractères.
@@ -18,11 +18,6 @@ formule de fusion des scores — vérifié le 20 juillet 2026 en relisant les de
   liste, ce qui évite d'avoir à normaliser/pondérer arbitrairement. Le reranking final
   (RetrievalReranker, cross-encoder) sert d'arbitrage plus fin ensuite.
 
-Statut : implémenté (chunking, embeddings via sentence-transformers/BGE-M3, indexation
-Chroma persistante + BM25 en mémoire, recherche hybride RRF), testé avec des doublures
-(chromadb et rank_bm25 réels, mais fonction d'embedding factice — voir tests). PAS ENCORE
-validé avec le vrai modèle BGE-M3 (~2 Go, pas téléchargeable dans ce sandbox sans accès
-réseau) : à valider sur la machine d'Ayman via `scripts/indexer_documents.py`.
 """
 from __future__ import annotations
 

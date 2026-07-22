@@ -59,9 +59,9 @@ def test_generer_reponse_indicateur_ne_necessite_aucun_llm(conn, id_document):
 
 
 def test_generer_reponse_indicateur_normalise_unite_pourcentage_en_majuscules(conn, id_document):
-    # Regression : bug reel trouve le 21 juillet 2026 sur I4001 -- l'API BDS renvoie
-    # parfois l'unite en toutes lettres et en majuscules ("POURCENTAGE"), ce qui
-    # donnait "9 POURCENTAGE" au lieu de "9%" avant la correction.
+    # Regression : cas reel observe sur I4001 -- l'API BDS renvoie parfois l'unite en
+    # toutes lettres et en majuscules ("POURCENTAGE"), ce qui donnait "9 POURCENTAGE"
+    # au lieu de "9%" avant la correction.
     generateur = Generateur(conn)
     indicateur = Indicateur(
         id_indicateur=1, nom="Taux de chômage", valeur=9.0, unite="POURCENTAGE",

@@ -5,10 +5,9 @@ docs/conception_uml_v3.pdf (figures 5 et 6).
 
 `poser_question` est la fonction réutilisable (testée avec de vraies bases SQLite/Chroma
 et des fonctions embedding/reranking/génération factices, voir
-tests/test_poser_question.py) ; `main` est le point d'entrée CLI, pensé pour un usage
-réel sur la machine d'Ayman une fois l'index peuplé (scripts/indexer_documents.py,
-Sprint 2) -- et une fois le LLM de génération choisi (voir ADR 0002, point encore
-ouvert) pour le chemin notion.
+tests/test_poser_question.py) ; `main` est le point d'entrée CLI, qui suppose l'index
+déjà peuplé (scripts/indexer_documents.py) et branche le LLM de production pour le
+chemin notion (voir ADR 0002, src/llm_mistral.py).
 
 Usage prévu :
 
@@ -70,9 +69,9 @@ def main(question: str, chemin_db: Optional[Path] = None) -> None:
         indexeur = IndexeurTexte()
         reranker = RetrievalReranker(indexeur)  # vrai cross-encoder, voir ADR 0007
         routeur = Routeur()
-        # Mistral choisi comme LLM de production le 21 juillet 2026 (voir ADR 0002,
-        # src/llm_mistral.py) : necessite MISTRAL_API_KEY dans un fichier .env. Le
-        # chemin chiffre fonctionne meme sans cle configuree (voir Generateur).
+        # Mistral choisi comme LLM de production (voir ADR 0002, src/llm_mistral.py) :
+        # necessite MISTRAL_API_KEY dans un fichier .env. Le chemin chiffre fonctionne
+        # meme sans cle configuree (voir Generateur).
         generateur = Generateur(conn, fonction_generation=llm_mistral.generer)
 
         reponse = poser_question(conn, reranker, routeur, generateur, question)

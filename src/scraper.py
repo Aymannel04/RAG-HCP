@@ -4,19 +4,11 @@ Role : collecter les pages HTML des categories ciblees du site hcp.ma, ET les pi
 jointes (PDF / XLSX / DOCX) qu'elles referencent — voir ADR 0003
 (docs/adr/0003-ingestion-pdf-xlsx.md) et ADR 0005 (docs/adr/0005-extension-docx.md).
 
-Constat du 15 juillet 2026 (test reel sur 27 pages) : les pages HTML ne portent qu'un
-resume court de l'article ; les vraies donnees (tableaux complets, series chiffrees)
-sont dans des PDF/XLSX/DOCX telecharges depuis ces pages. Le Scraper doit donc detecter
-et telecharger ces pieces jointes, pas seulement lire le HTML de la page elle-meme.
-
-Statut : la collecte de page HTML + titre/date est fonctionnelle et testee en reel
-(27/27). La detection/telechargement de pieces jointes a ete testee en reel une premiere
-fois le 15 juillet : le telechargement marche (8000+ caracteres et de vrais tableaux de
-donnees extraits d'un PDF reel), mais le premier test a remonte un vrai PDF en arabe
-alors que le champ langue etait code en dur "fr" — corrige ci-dessous (detection de la
-langue + filtrage arabe pour l'instant, voir TODO.md/support arabe en marge V1).
-Le 17 juillet 2026, decouverte que certaines pages (IPC, IPPI) ne publient qu'en DOCX —
-support ajoute (ADR 0005) plutot que de laisser ces publications sans contenu indexe.
+Les pages HTML de hcp.ma ne portent qu'un resume court de l'article ; les vraies
+donnees (tableaux complets, series chiffrees) sont dans des PDF/XLSX/DOCX telecharges
+depuis ces pages. Le Scraper detecte et telecharge ces pieces jointes en plus du HTML
+de la page elle-meme, et filtre par langue (francais par defaut, arabe hors perimetre
+V1, voir fiche de cadrage section 11).
 """
 from __future__ import annotations
 
@@ -39,11 +31,9 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; HCP-RAG-Stage/0.1; usage acad
 DOSSIER_BRUT = Path(__file__).resolve().parent.parent / "data" / "raw"
 
 # Indices utilises pour reperer un lien de telechargement PDF/XLSX/DOCX sur une page
-# hcp.ma. Heuristique construite a partir des pages observees le 15 juillet 2026 (notes
-# de conjoncture) : le href ne contient pas toujours l'extension (ex.
-# /attachment/2866603/, /file/247582/), mais le texte du lien, son attribut title, ou
-# l'icone associee si. Le DOCX suit le meme schema (ex. page IPC : href
-# "/attachment/2885946/", texte du lien "IPC_Mai 2026_Fr.docx" — verifie le 17/07/2026).
+# hcp.ma. Le href ne contient pas toujours l'extension (ex. /attachment/2866603/,
+# /file/247582/) : on se rabat alors sur le texte du lien, son attribut title, ou
+# l'icone associee.
 EXTENSIONS_XLSX = (".xlsx", ".xls")
 EXTENSIONS_PDF = (".pdf",)
 EXTENSIONS_DOCX = (".docx",)
@@ -56,16 +46,14 @@ INDICES_ARABE = ("_ar.", "_ar)", "(ar)", " ar)", "version ar", "arabe")
 INDICES_FRANCAIS = ("_fr.", "_fr)", "(fr)", " fr)", "version fr", "francais", "français")
 
 # Motif d'URL des pages article sur hcp.ma (ex. ".../Situation-economique-nationale...
-# _a4325.html"), stable et observe sur des dizaines de pages depuis le 15 juillet 2026 —
-# sert a distinguer un lien d'article d'un lien de menu/navigation sur une page listing
-# (voir ADR 0006, docs/adr/0006-decouverte-automatique-publications.md).
+# _a4325.html"), stable sur l'ensemble du site — sert a distinguer un lien d'article
+# d'un lien de menu/navigation sur une page listing (voir ADR 0006).
 PATTERN_URL_ARTICLE = re.compile(r"_a\d+\.html$")
 
-# Parametre de pagination observe sur les pages listing (ex.
-# "?start=5&show=&order="). Le pas entre deux pages (5 dans les cas verifies le 20
-# juillet 2026) n'est pas code en dur : il est deduit des liens de pagination presents
-# sur la page elle-meme (voir _increments_pagination), pour rester robuste si hcp.ma
-# change ce nombre.
+# Parametre de pagination observe sur les pages listing (ex. "?start=5&show=&order=").
+# Le pas entre deux pages n'est pas code en dur : il est deduit des liens de pagination
+# presents sur la page elle-meme (voir _increments_pagination), pour rester robuste si
+# hcp.ma change ce nombre.
 PATTERN_PARAM_START = re.compile(r"[?&]start=(\d+)")
 
 
@@ -174,15 +162,10 @@ class Scraper:
         """Ecarte les URLs d'articles detectees comme etant en arabe, sauf si
         `self.inclure_arabe` (meme regle que pour les pieces jointes, voir
         `collecter`/`_recuperer_page_et_pieces` — hors scope V1, fiche de cadrage
-        section 11).
-
-        Ajoute suite a un vrai cas trouve en conditions reelles le 20 juillet 2026 :
-        avec la liste fixe d'URLs (Sprint 1), ce cas n'arrivait jamais car les pages
-        etaient choisies a la main en francais. La decouverte automatique (ADR 0006)
-        remonte, elle, aussi les pages listing dans leur ordre reel — dont des versions
-        arabes de certains articles (ex. "...-version-Ar_a4217.html", titre de lien
-        "(version Ar)"), qui doivent etre ecartees comme n'importe quelle piece jointe
-        arabe.
+        section 11). La decouverte automatique (ADR 0006) remonte les pages listing
+        dans leur ordre reel, qui incluent des versions arabes de certains articles
+        (ex. "...-version-Ar_a4217.html", titre de lien "(version Ar)") a ecarter
+        comme n'importe quelle piece jointe arabe.
         """
         urls: list[str] = []
         for url, langue in urls_avec_langue:
@@ -203,10 +186,10 @@ class Scraper:
            dans un titre de section, contrairement aux liens de menu/pied de page.
         2. L'URL doit suivre le motif stable des pages article de hcp.ma
            (`PATTERN_URL_ARTICLE`, ex. "..._a4325.html").
-        Le filtre 1 seul aurait suffi a eliminer le faux positif trouve en test
-        (menu "Tout sur HCP" -> Qui-sommes-nous_a3079.html, hors titre mais dont l'URL
-        suit quand meme le motif _aXXX.html) ; les deux filtres combines sont plus
-        robustes qu'un seul en cas de gabarit de page legerement different.
+        Le filtre 1 seul aurait suffi a eliminer le faux positif du menu "Tout sur HCP"
+        (-> Qui-sommes-nous_a3079.html, hors titre mais dont l'URL suit quand meme le
+        motif _aXXX.html) ; les deux filtres combines sont plus robustes qu'un seul en
+        cas de gabarit de page legerement different.
 
         La langue est detectee via `_detecter_langue` (meme heuristique que pour les
         pieces jointes), sur un signal combinant l'URL et le texte du lien — ex.
@@ -290,11 +273,9 @@ class Scraper:
 
     @staticmethod
     def _extraire_date(soup: BeautifulSoup) -> Optional[str]:
-        # Teste sur un vrai echantillon de 27 pages (15 juillet 2026) : 25/27 dates
-        # trouvees du premier coup. Les 2 echecs venaient de pages ou "Rédigé le" est
-        # encode en Unicode decompose (accent = caractere separe) plutot que compose,
-        # ce qui cassait le match sur "dig[ée]". Normaliser en NFC avant la regex regle
-        # ce cas sans rien retirer au comportement existant.
+        # Certaines pages encodent "Rédigé le" en Unicode decompose (accent = caractere
+        # separe) plutot que compose, ce qui casse le match sur "dig[ée]" sans
+        # normalisation prealable en NFC.
         texte = unicodedata.normalize("NFC", soup.get_text(" ", strip=True))
         m = re.search(r"R[ée]dig[ée] le ([^\.]+?\d{4}(?:\s*[àa]\s*\d{1,2}[:h]\d{2})?)", texte)
         return m.group(1).strip() if m else None
@@ -312,11 +293,10 @@ class Scraper:
         """Repere les liens de telechargement PDF/XLSX/DOCX sur une page article, avec
         leur langue.
 
-        Heuristique (affinee le 15 juillet apres un premier test reel qui a remonte un PDF
-        arabe non identifie comme tel ; etendue le 17 juillet au DOCX, voir ADR 0005) : on
-        regarde le href, le texte du lien, l'attribut title, et le src des images
+        On regarde le href, le texte du lien, l'attribut title, et le src des images
         contenues dans le lien (icones "pdf.jpg", "icon_pdf.gif", "icon_docx.gif"
-        observees sur le site), pour determiner a la fois le type de fichier et sa langue.
+        observees sur le site), pour determiner a la fois le type de fichier et sa
+        langue (voir ADR 0005 pour le support DOCX).
         """
         pieces: list[tuple[str, str, str]] = []
         for a in soup.find_all("a", href=True):
@@ -364,12 +344,10 @@ class Scraper:
             type_fichier = type_suppose
 
         # Verification du contenu reel (nombres magiques), pas seulement du Content-Type :
-        # l'heuristique de detection de liens est large et attrape parfois des liens qui ne
-        # menent pas vraiment a un PDF/XLSX/DOCX (page d'erreur, redirection...). Sans ce
-        # controle, un fichier invalide fait planter pdfplumber/openpyxl/python-docx plus
-        # tard dans le pipeline (vu en reel le 15 juillet : "PDFSyntaxError: No /Root
-        # object! - Is this really a PDF?" ; et le 17 juillet : des .docx recuperes AVANT
-        # ce fix trainaient dans data/raw/ sous une fausse extension .pdf).
+        # l'heuristique de detection de liens est large et attrape parfois des liens qui
+        # ne menent pas vraiment a un PDF/XLSX/DOCX (page d'erreur, redirection...). Sans
+        # ce controle, un fichier invalide fait planter pdfplumber/openpyxl/python-docx
+        # plus tard dans le pipeline.
         if not self._contenu_semble_valide(resp.content, type_fichier):
             print(
                 f"[Scraper] contenu invalide pour {url_piece} "
@@ -399,10 +377,9 @@ class Scraper:
         uniquement au Content-Type (parfois absent ou trompeur sur des liens indirects).
 
         XLSX et DOCX sont tous deux des archives ZIP (signature "PK") : la seule
-        signature ne suffit pas a les distinguer. Decouverte concrete le 17 juillet 2026
-        en diagnostiquant des fichiers .docx recuperes (avant ce fix) sous une fausse
-        extension .pdf dans data/raw/ — on verifie donc en plus la presence du dossier
-        interne caracteristique du format attendu (xl/ pour XLSX, word/ pour DOCX).
+        signature ne suffit pas a les distinguer. On verifie donc en plus la presence
+        du dossier interne caracteristique du format attendu (xl/ pour XLSX, word/ pour
+        DOCX).
         """
         if type_fichier == "pdf":
             return contenu[:5] == b"%PDF-"

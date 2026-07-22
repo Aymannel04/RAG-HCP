@@ -9,8 +9,8 @@ d'acces reseau vers hcp.ma - voir data/seed_urls.py) :
 Ce script utilise le VRAI Scraper (detection + telechargement + validation des
 pieces jointes) et le VRAI Extracteur (extraction texte/tableaux) sur les pages
 IPC et IPPI de Mai 2026, qui ne publient leur note mensuelle qu'en .docx (voir
-JOURNAL.md, 17 juillet 2026, decouverte DOCX). Rien n'est reimplemente : c'est
-exactement le pipeline src/scraper.py + src/extracteur.py utilise en production.
+ADR 0005). Rien n'est reimplemente : c'est exactement le pipeline src/scraper.py +
+src/extracteur.py utilise en production.
 
 Aucune insertion en base ici (pas encore l'objet de ce script) - juste la preuve
 que le pipeline DOCX marche de bout en bout sur un vrai fichier hcp.ma.

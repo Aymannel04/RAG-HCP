@@ -5,10 +5,10 @@ Rôle : structurer les indicateurs chiffrés en lignes prêtes pour la table `in
 Deux sources possibles, voir ADR 0004 (docs/adr/0004-api-bds-pour-les-indicateurs.md) et
 son complément (docs/complement_conception_bds.pdf) :
 - `structurer_depuis_bds` : source primaire pour Économie / Marché du travail / Population,
-  à partir d'un indicateur récupéré via `src/bds_client.py`. Implémenté et testé contre la
-  forme réelle de l'API (vérifiée le 16-17 juillet 2026 sur les codes I3181, I2790, ...).
-- `structurer` : repli PDF/XLSX pour le texte hors catalogue BDS. Pas encore implémenté
-  (reste dans le backlog Sprint 2, voir TODO.md).
+  à partir d'un indicateur récupéré via `src/bds_client.py`.
+- `structurer` : repli PDF/XLSX pour le texte hors catalogue BDS. Non prioritaire depuis
+  que l'API BDS couvre la majorité des indicateurs des 3 catégories ciblées (voir
+  TODO.md).
 """
 from __future__ import annotations
 
@@ -24,18 +24,18 @@ class ConstructeurIndicateurs:
     def structurer(self, id_document: int, tableaux: list[list[list[str]]]) -> list[Indicateur]:
         """Repli PDF/XLSX : retourne la liste des Indicateur identifiés dans `tableaux`.
 
-        Pas encore implémenté : depuis l'ADR 0004, l'API BDS couvre la majorité des
+        Non implémenté : depuis l'ADR 0004, l'API BDS couvre la majorité des
         indicateurs des 3 catégories ciblées (voir `structurer_depuis_bds`), ce qui rend
         ce chemin moins prioritaire. Reste nécessaire pour les publications hors
         catalogue BDS (voir ADR 0003).
         """
-        raise NotImplementedError("A implementer semaine 2, voir TODO.md")
+        raise NotImplementedError("Repli PDF/XLSX hors périmètre V1, voir TODO.md")
 
     def structurer_depuis_bds(self, indicateur_json: dict, id_document: int) -> list[Indicateur]:
         """Transforme la réponse de `bds_client.recuperer_indicateur(code)` en une liste
         d'`Indicateur`, un par (période, ventilation).
 
-        Forme réelle de `indicateur_json` (vérifiée en conditions réelles) :
+        Forme réelle de `indicateur_json` renvoyée par l'API BDS :
         {
           "code": "I3181", "label": "...",
           "metaData": {"unit": "En millions de dhs", ...},
@@ -55,8 +55,7 @@ class ConstructeurIndicateurs:
         # sans ventilation, ex. I2790 "Taux d'urbanisation") — la clé existe, sa valeur
         # est None, donc `.get("dimensions", [])` renvoie None et non []. D'où le
         # `or` après chaque `.get(...)` ci-dessous : il rattrape aussi bien la clé
-        # absente que la clé présente avec une valeur null. Bug trouvé sur un vrai run
-        # (voir échange du 17 juillet 2026, TypeError sur I2790).
+        # absente que la clé présente avec une valeur null.
         unite = (indicateur_json.get("metaData") or {}).get("unit")
         periodes_valides = set(indicateur_json.get("periods") or [])
 
@@ -106,10 +105,10 @@ class ConstructeurIndicateurs:
 
     @staticmethod
     def construire_document_synthetique(indicateur_json: dict) -> Document:
-        """Construit le `Document` synthétique associé à un indicateur BDS (voir ADR 0004,
-        section "Précisions du 15 juillet" : `type="api"`, `url` = fiche BDS, `titre` =
-        libellé de l'indicateur). Sert de source citable pour la traçabilité (NF3), même si
-        aucun fichier n'a réellement été téléchargé.
+        """Construit le `Document` synthétique associé à un indicateur BDS (voir ADR 0004 :
+        `type="api"`, `url` = fiche BDS, `titre` = libellé de l'indicateur). Sert de
+        source citable pour la traçabilité (NF3), même si aucun fichier n'a réellement
+        été téléchargé.
         """
         code = indicateur_json["code"]
         date_publication = None

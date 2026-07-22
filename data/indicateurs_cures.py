@@ -1,14 +1,10 @@
 """
-Liste curée des indicateurs BDS pré-remplis chaque nuit (voir ADR 0004, section
-"Précisions du 15 juillet" — étape 1 de la stratégie cache-aside, figure B du
-complément de conception).
+Liste curée des indicateurs BDS pré-remplis chaque nuit (voir ADR 0004 — étape 1 de
+la stratégie cache-aside, figure B du complément de conception).
 
 Chaque code a été vérifié réel : soit par appel direct à
 `GET https://bds.hcp.ma/api/v1/indicators/{code}` (I3181), soit trouvé dans le
-catalogue réel via `GET https://bds.hcp.ma/api/v1/subject-groups` (Population &
-Démographie et Économie récupérés le 17 juillet 2026 par web_fetch ; Marché du
-travail fourni par Ayman le même jour depuis data/bds_catalogue.json, la réponse
-web_fetch ayant été coupée avant ce thème).
+catalogue réel via `GET https://bds.hcp.ma/api/v1/subject-groups`.
 """
 from __future__ import annotations
 

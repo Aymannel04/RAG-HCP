@@ -6,20 +6,16 @@ Voir les deux scénarios formalisés dans docs/conception_uml_v3.pdf, figures 5 
 (exemples de référence : "Quel est le taux de chômage actuel ?" -> CHIFFRE,
 "C'est quoi le RGPH ?" -> NOTION).
 
-Décision d'implémentation (Sprint 3, 21 juillet 2026) : classification par heuristique
-de mots-clés plutôt que par appel LLM, contrairement à ce qu'envisageait le docstring
-d'origine ("V1 : appel LLM"). Deux raisons :
+Décision d'implémentation : classification par heuristique de mots-clés plutôt que par
+appel LLM, contrairement à ce qu'envisageait le docstring d'origine ("V1 : appel LLM").
+Deux raisons :
 1. Cette approche était déjà celle proposée à l'encadrante dans
    docs/note_stockage_routage_benchmark.pdf (section routage) comme option V1, l'appel
    LLM étant explicitement repoussé en V2 dans ce même document.
-2. Le choix du LLM de génération reste une décision ouverte (voir ADR 0002, "point
-   réellement bloquant... doit être validé avec l'encadrante") : un classifieur qui ne
-   dépend d'aucun LLM permet d'avancer le Sprint 3 sans attendre cette validation, et
-   reste un choix défendable en soi (rapide, gratuit, déterministe, donc plus facile à
-   tester et déboguer qu'un appel LLM pour une tâche aussi simple qu'une classification
-   binaire).
-
-Statut : implémenté (heuristique), testé.
+2. Un classifieur qui ne dépend d'aucun LLM reste un choix défendable en soi (rapide,
+   gratuit, déterministe, donc plus facile à tester et déboguer qu'un appel LLM pour
+   une tâche aussi simple qu'une classification binaire), et découple ce module du
+   choix du LLM de génération (voir ADR 0002).
 """
 from __future__ import annotations
 

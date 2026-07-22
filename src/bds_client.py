@@ -2,8 +2,7 @@
 Client pour l'API de la Base de Donnees Statistiques du HCP (bds.hcp.ma).
 Voir ADR 0004 (docs/adr/0004-api-bds-pour-les-indicateurs.md).
 
-Decouverte le 15 juillet 2026 en inspectant le trafic reseau de bds.hcp.ma (l'API
-n'est pas documentee publiquement) :
+API non documentee publiquement, structure identifiee par inspection reseau :
 
 - GET https://bds.hcp.ma/api/v1/subject-groups
   Renvoie l'arborescence complete du catalogue : 7 themes, chacun avec ses sujets,
@@ -15,11 +14,6 @@ n'est pas documentee publiquement) :
   Renvoie la serie complete d'un indicateur donne : label, unite, source,
   frequence, toutes les periodes disponibles, et les dimensions de ventilation
   (ex. par region, par sexe, par branche d'activite) avec leurs valeurs.
-
-Statut : structure de l'API confirmee via inspection reseau reelle (voir echange
-du 15 juillet 2026), et un appel a /indicators/I3181 a ete verifie manuellement
-(retourne bien du JSON structure). PAS ENCORE teste depuis ce module Python
-(pas d'acces reseau vers bds.hcp.ma dans ce sandbox) — a valider en priorite.
 """
 from __future__ import annotations
 

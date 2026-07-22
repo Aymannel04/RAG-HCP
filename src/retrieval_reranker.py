@@ -4,15 +4,11 @@ Rôle : recherche hybride (dense + BM25) puis reranking pour ne garder que les
 passages les plus pertinents, dans le cas d'une question conceptuelle/narrative
 (voir docs/conception_uml_v3.pdf, figure 6).
 
-Décision d'implémentation (Sprint 3, 21 juillet 2026, voir ADR 0007) : reranking par
-cross-encoder BAAI/bge-reranker-v2-m3 (via sentence-transformers), même famille que
-BGE-M3 déjà retenu pour les embeddings (ADR 0002) -- cohérent, multilingue, open source,
+Décision d'implémentation (voir ADR 0007) : reranking par cross-encoder
+BAAI/bge-reranker-v2-m3 (via sentence-transformers), même famille que BGE-M3 déjà
+retenu pour les embeddings (ADR 0002) -- cohérent, multilingue, open source,
 hébergeable localement. Fonction de reranking injectable au constructeur, même patron
 que `IndexeurTexte._embarquer` : évite de télécharger le modèle (~600 Mo) dans les tests.
-
-Statut : implémenté, testé avec une fonction de reranking factice. PAS ENCORE validé
-avec le vrai modèle (même limite que BGE-M3 en Sprint 2 : pas d'accès réseau dans le
-bac à sable de développement) -- à valider sur la machine d'Ayman.
 """
 from __future__ import annotations
 
