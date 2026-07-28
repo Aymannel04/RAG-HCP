@@ -178,7 +178,8 @@ jointes tout du long.
 Backlog :
 - [x] Routeur de question (`Routeur.classifier`) — heuristique de mots-clés (pas de LLM,
       voir docstring du module), 18 tests. Signal narratif prioritaire sur signal chiffré
-      (question mixte type "pourquoi le chômage a-t-il augmenté" -> NOTION).
+      (question mixte type "pourquoi le chômage a-t-il augmenté" -> NOTION, comportement
+      d'origine — **remplacé le 28/07 par `TypeQuestion.MIXTE`, voir plus bas**).
       **Complété le 28/07** : `MOTS_CHIFFRE` ne couvrait que "taux"/"nombre"/"valeur"/
       "indice"/"pourcentage" — une question chiffrée réelle comme "structure des actifs
       occupés" ne matchait aucun mot-clé et tombait par défaut sur NOTION (dégradation
@@ -196,6 +197,21 @@ Backlog :
       `llm_mistral.classifier_question` (nouvelle fonction, température 0). 8 nouveaux
       tests avec fonctions factices (dont un qui vérifie explicitement que le LLM
       n'est jamais appelé quand l'heuristique suffit). Suite complète : 118/118.
+      **Cas mixte résolu le 28/07** (dernière limite ouverte de la synthèse Sprint 2/3,
+      Q4 — celle proposée par l'encadrante le 20/07, jamais implémentée jusque-là) :
+      `TypeQuestion.MIXTE` renvoyé quand un signal narratif "combinable" (pourquoi,
+      tendance, évolution, analyse, cause, raison — pas les mots purement
+      définitionnels comme "comment"/"méthodologie", qui restent NOTION pur même
+      combinés à un mot chiffré, pour éviter de casser des questions comme "comment
+      est calculé l'indice des prix ?") ET un signal chiffré sont tous les deux
+      présents. `scripts/poser_question.py` interroge alors LookupStructure ET
+      RetrievalReranker, et `Generateur` fusionne les deux résultats
+      (`ContexteMixte`) : le chiffre reste produit par le gabarit déterministe
+      (jamais reformulé par le LLM), injecté dans le contexte fourni au LLM pour que
+      son explication reste cohérente, citation des deux sources si elles diffèrent.
+      Dégradation propre à chaque étage si un seul des deux chemins trouve quelque
+      chose. 3 fichiers modifiés (`routeur.py`, `generateur.py`,
+      `poser_question.py`), 11 nouveaux tests. Suite complète : 130/130.
 - [x] Lookup structuré (`LookupStructure.rechercher_indicateur`) — correspondance par
       recouvrement de tokens contre les noms d'indicateurs réels en base (libellés BDS),
       extraction région/période, requête SQL exacte, repli si période/région non

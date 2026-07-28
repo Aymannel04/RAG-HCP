@@ -872,3 +872,51 @@ de stage en fin de période, pas besoin d'être exhaustif.
   vocabulaire volontairement absent des deux listes (ex. "Quel est le montant des
   exportations marocaines ?" -- "montant" n'est dans aucune liste) et verifier que le
   LLM la reclasse correctement en CHIFFRE plutot que de tomber sur NOTION.
+- **Confirme** : "Quel est le montant des exportations marocaines ?" correctement
+  reclasse CHIFFRE par le LLM, reponse sourcee directement sur l'indicateur BDS I1437.
+
+## 28 juillet 2026 (suite 4) — cas mixte du Routeur : dispatch parallele et fusion
+
+- Derniere limite ouverte de la synthese Sprint 2/3 (Q4) : une question comme
+  "pourquoi le chomage a-t-il augmente ?" a une composante chiffree ET narrative,
+  mais seul le signal narratif etait retenu (priorite au narratif en cas de conflit) --
+  LookupStructure n'etait jamais sollicite, alors que la proposition initiale de
+  l'encadrante (20/07) envisageait un dispatch parallele des deux chemins avec fusion
+  des resultats.
+- Implemente : `TypeQuestion.MIXTE` (nouvelle valeur de l'enum), renvoye quand un
+  signal narratif ET un signal chiffre sont tous les deux presents dans la question.
+  Piege identifie et evite en ecrivant les tests : associer N'IMPORTE quel mot de
+  `MOTS_NOTION` a un mot de `MOTS_CHIFFRE` aurait casse des questions purement
+  notionnelles qui citent un nom d'indicateur sans rien demander de chiffre -- ex.
+  "Comment est calcule l'indice des prix a la consommation ?" contient "indice des"
+  (signal chiffre) ET "comment" (signal narratif), mais ne demande aucun chiffre.
+  Solution : `MOTS_NOTION_COMBINABLES`, un sous-ensemble de `MOTS_NOTION` limite aux
+  mots qui parlent d'evolution/cause d'une valeur dans le temps (pourquoi, tendance,
+  evolution, analyse, cause, raison) -- seuls ceux-la peuvent declencher MIXTE en
+  presence d'un signal chiffre. Les mots purement definitionnels/methodologiques
+  (comment, expliquer, definir, methodologie, difference entre) gardent l'ancien
+  comportement : NOTION pur, quel que soit ce qui les accompagne.
+- `scripts/poser_question.py` : nouveau branchement MIXTE qui interroge LookupStructure
+  ET RetrievalReranker (dispatch parallele reel, pas sequentiel avec repli). Degrade
+  proprement a chaque etage : indicateur + chunks trouves -> reponse fusionnee ;
+  indicateur seul -> reponse chiffree seule ; rien trouve en base structuree -> repli
+  sur le chemin notion seul.
+- `src/generateur.py` : nouvelle dataclass `ContexteMixte(indicateur, chunks)` et
+  methode `_generer_reponse_mixte`. Principe respecte : le chiffre reste TOUJOURS
+  produit par le gabarit deterministe (`_phrase_chiffree`, factorisee depuis
+  `_generer_reponse_chiffree` pour eviter la duplication), jamais reformule par le
+  LLM -- celui-ci ne sert qu'a expliquer le "pourquoi", avec le chiffre officiel
+  injecte en tete de son contexte pour que son explication reste coherente avec la
+  valeur deja citee. `Reponse` etendue avec trois champs optionnels
+  (`source_url_secondaire`, etc.) pour citer les deux sources quand elles different
+  (l'indicateur BDS et le document narratif ne sont pas toujours le meme document) --
+  champs vides par defaut, aucune regression sur les chemins chiffre/notion purs.
+- 11 nouveaux tests (routeur : signal combinable vs non-combinable, LLM peut aussi
+  renvoyer MIXTE ; generateur : fusion, meme document donc pas de source secondaire,
+  degradation sans chunks, degradation sans fonction_generation ; poser_question :
+  bout en bout mixte avec vraies bases SQLite/Chroma temporaires). Suite complete :
+  130/130, aucune regression sur les 119 tests existants.
+- Reste a valider en conditions reelles par Ayman :
+  `python -m scripts.poser_question "Pourquoi le taux de chomage a-t-il augmente ?"`
+  devrait maintenant citer le chiffre exact ET une explication sourcee, potentiellement
+  deux sources distinctes.
