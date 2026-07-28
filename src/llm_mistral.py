@@ -66,3 +66,51 @@ def generer(question: str, texte_contexte: str) -> str:
     )
     reponse.raise_for_status()
     return reponse.json()["choices"][0]["message"]["content"].strip()
+
+
+PROMPT_SYSTEME_CLASSIFICATION = (
+    "Tu classes une question posee a un systeme de questions-reponses sur les "
+    "statistiques publiques du Maroc (HCP). Reponds UNIQUEMENT par le mot CHIFFRE si "
+    "la question porte sur une valeur, un chiffre, une statistique precise -- meme "
+    "formulee sans les mots 'taux' ou 'nombre' (ex. structure, repartition, part, "
+    "effectif, evolution d'une valeur dans le temps). Reponds UNIQUEMENT par le mot "
+    "NOTION si la question porte sur une explication, une definition, une "
+    "methodologie, un pourquoi/comment, ou une analyse. Ne reponds rien d'autre que "
+    "CHIFFRE ou NOTION, aucune ponctuation, aucune explication."
+)
+
+
+def classifier_question(question: str) -> str:
+    """Fonction de classification compatible avec Routeur (voir
+    src/routeur.py::TypeFonctionClassification) : dernier recours seulement, appelee
+    uniquement quand aucune regle par mots-cles n'a permis de trancher (voir docstring
+    de Routeur, section "V2 ajoutee le 28/07"). Renvoie la chaine brute renvoyee par le
+    modele ("CHIFFRE"/"NOTION" attendus) -- c'est Routeur qui valide/normalise et
+    retombe sur son comportement par defaut si la reponse est inattendue.
+
+    À injecter tel quel : `Routeur(fonction_classification_llm=classifier_question)`.
+    """
+    cle_api = os.environ.get("MISTRAL_API_KEY")
+    if not cle_api:
+        raise RuntimeError(
+            "MISTRAL_API_KEY manquante. Cree un compte gratuit sur "
+            "https://console.mistral.ai/, genere une cle API (section API Keys), "
+            "et ajoute-la dans un fichier .env a la racine du projet : "
+            "MISTRAL_API_KEY=ta_cle_ici"
+        )
+
+    reponse = requests.post(
+        URL_API,
+        headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
+        json={
+            "model": MODELE,
+            "messages": [
+                {"role": "system", "content": PROMPT_SYSTEME_CLASSIFICATION},
+                {"role": "user", "content": question},
+            ],
+            "temperature": 0.0,  # classification : aucune creativite souhaitee
+        },
+        timeout=15,  # plus court que generer() : reponse attendue en un seul mot
+    )
+    reponse.raise_for_status()
+    return reponse.json()["choices"][0]["message"]["content"].strip()

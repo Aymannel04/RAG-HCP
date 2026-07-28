@@ -68,7 +68,10 @@ def main(question: str, chemin_db: Optional[Path] = None) -> None:
     try:
         indexeur = IndexeurTexte()
         reranker = RetrievalReranker(indexeur)  # vrai cross-encoder, voir ADR 0007
-        routeur = Routeur()
+        # fonction_classification_llm : dernier recours seulement, voir docstring de
+        # Routeur ("V2 ajoutee le 28/07") -- sans effet si MISTRAL_API_KEY absente,
+        # l'appel echoue silencieusement et le repli NOTION habituel s'applique.
+        routeur = Routeur(fonction_classification_llm=llm_mistral.classifier_question)
         # Mistral choisi comme LLM de production (voir ADR 0002, src/llm_mistral.py) :
         # necessite MISTRAL_API_KEY dans un fichier .env. Le chemin chiffre fonctionne
         # meme sans cle configuree (voir Generateur).
