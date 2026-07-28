@@ -90,6 +90,70 @@ def test_structurer_depuis_bds_gere_dimensions_null():
     assert resultats[0].valeur == 63.5
 
 
+# Reproduit (en miniature) la vraie reponse de GET /api/v1/indicators/I4001, obtenue
+# le 28/07 via scripts/diagnostic_dimensions.py -- trois dimensions croisees, ids de
+# modalite joints par un POINT dans la cle (jamais par "_", contrairement a
+# l'hypothese initiale qui faisait echouer silencieusement tout indicateur
+# multi-dimension, voir TODO.md/JOURNAL.md du 28/07). Chaque dimension a une modalite
+# "total": true (l'agregat de cette dimension precise).
+INDICATEUR_JSON_MULTI_DIMENSIONS_MOCK = {
+    "code": "I4001",
+    "label": "Taux de chômage selon le Milieu, le sexe et le groupe d'âges",
+    "metaData": {"unit": "%"},
+    "periods": ["2025"],
+    "dimensions": [
+        {
+            "id": 3, "label": "Mileu",
+            "modalites": [
+                {"id": 11, "label": "National", "total": True},
+                {"id": 12, "label": "Urbain", "total": False},
+                {"id": 13, "label": "Rural", "total": False},
+            ],
+        },
+        {
+            "id": 4, "label": "Age",
+            "modalites": [
+                {"id": 14, "label": "15-24 ans", "total": False},
+                {"id": 18, "label": "15 ans et plus", "total": True},
+            ],
+        },
+        {
+            "id": 5, "label": "Sexe",
+            "modalites": [
+                {"id": 19, "label": "Total", "total": True},
+                {"id": 20, "label": "Masculin", "total": False},
+                {"id": 21, "label": "Feminin", "total": False},
+            ],
+        },
+    ],
+    "data": {
+        # Milieu, Age et Sexe tous a leur modalite "total" -> agregat national complet
+        "11.18.19_2025": {"value": "9.0", "footNote": None},
+        # Milieu et Age agreges, seul le Sexe est specifique -> ne garde que "Feminin"
+        "11.18.21_2025": {"value": "14.6", "footNote": None},
+        "11.18.20_2025": {"value": "6.5", "footNote": None},
+        # Aucune dimension agregee -> les trois labels apparaissent
+        "12.14.21_2025": {"value": "28.3", "footNote": None},
+    },
+}
+
+
+def test_structurer_depuis_bds_ids_modalite_joints_par_point():
+    # Regression du bug du 28/07 : cle.split("_") traitait "11.18.21" comme un seul id
+    # non numerique (a cause des points) et le rejetait -> region=None pour toutes les
+    # lignes d'un indicateur a plusieurs dimensions, meme quand une vraie ventilation
+    # existait. Doit maintenant eclater le prefixe sur "." pour retrouver les ids.
+    resultats = ConstructeurIndicateurs().structurer_depuis_bds(
+        INDICATEUR_JSON_MULTI_DIMENSIONS_MOCK, id_document=1
+    )
+    par_region = {r.region: r.valeur for r in resultats}
+
+    assert par_region[None] == 9.0  # toutes dimensions a leur modalite "total"
+    assert par_region["Feminin"] == 14.6  # Milieu/Age agreges, seul Sexe reste (label BDS reel, sans accent)
+    assert par_region["Masculin"] == 6.5
+    assert par_region["Urbain, 15-24 ans, Feminin"] == 28.3  # aucune dimension agregee
+
+
 def test_construire_document_synthetique():
     doc = ConstructeurIndicateurs.construire_document_synthetique(INDICATEUR_JSON_MOCK)
 

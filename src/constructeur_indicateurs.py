@@ -35,18 +35,41 @@ class ConstructeurIndicateurs:
         """Transforme la réponse de `bds_client.recuperer_indicateur(code)` en une liste
         d'`Indicateur`, un par (période, ventilation).
 
-        Forme réelle de `indicateur_json` renvoyée par l'API BDS :
+        Forme réelle de `indicateur_json` renvoyée par l'API BDS (vérifiée en conditions
+        réelles sur I4001 le 28/07, voir JOURNAL.md -- corrige une hypothèse fausse sur
+        le format des clés qui faisait que TOUT indicateur à plusieurs dimensions
+        croisées (sexe x milieu x âge, ex. I4001/I3287/I1590) finissait avec
+        `region=None` sur toutes ses lignes, silencieusement) :
         {
-          "code": "I3181", "label": "...",
-          "metaData": {"unit": "En millions de dhs", ...},
-          "periods": ["2021T4", ...],
-          "dimensions": [{"id": 51, "label": "Branche d'activité",
-                           "modalites": [{"id": 250, "label": "Agriculture"}, ...]}],
-          "data": {"250_2007T1": {"value": "5878", "footNote": None}, ...}
+          "code": "I4001", "label": "...",
+          "metaData": {"unit": "%", ...},
+          "periods": ["2025", ...],
+          "dimensions": [
+            {"id": 3, "label": "Mileu", "modalites": [
+                {"id": 11, "label": "National", "total": true},
+                {"id": 12, "label": "Urbain", "total": false}, ...]},
+            {"id": 5, "label": "Sexe", "modalites": [
+                {"id": 19, "label": "Total", "total": true},
+                {"id": 21, "label": "Feminin", "total": false}, ...]}
+          ],
+          "data": {"11.14.21_2014": {"value": "13.3", "footNote": None}, ...}
         }
         La clé de `data` est soit juste une période (indicateur sans ventilation), soit
-        `{id_modalite}_{periode}` (une ventilation), soit `{id1}_{id2}_{periode}` (plusieurs
-        dimensions croisées) — le code ci-dessous gère les trois cas de façon générique.
+        `{prefixe}_{periode}` où `prefixe` est un ou plusieurs ids de modalité joints
+        par un POINT (une par dimension croisée, ex. "11.14.21" = milieu.âge.sexe) --
+        jamais joints par "_", qui ne sépare que le prefixe de la période elle-même.
+        Chaque dimension a une modalité marquée `"total": true` (l'agrégat de CETTE
+        dimension, ex. "National" pour Milieu, "15 ans et plus" pour Âge, "Total" pour
+        Sexe -- le libellé varie, pas de convention de nommage fiable). Ces modalités
+        agrégées sont volontairement EXCLUES de `region` : une ligne où seule la
+        dimension Sexe est spécifique (Féminin) et Milieu/Âge sont à leur modalité
+        "total" donne `region="Féminin"`, pas `region="Féminin, National, 15 ans et
+        plus"` -- ça permet à `LookupStructure` de retrouver directement "le taux
+        féminin toutes catégories confondues" par un simple label, sans avoir besoin de
+        deviner quels libellés représentent un agrégat (voir son docstring, section
+        "Ventilation"). Une ligne où TOUTES les dimensions sont à leur modalité "total"
+        obtient `region=None`, cohérent avec la convention déjà utilisée pour les
+        indicateurs sans ventilation du tout.
         """
         code = indicateur_json["code"]
         nom = indicateur_json["label"].strip()
@@ -61,10 +84,15 @@ class ConstructeurIndicateurs:
 
         # id de modalité -> label, toutes dimensions confondues (une seule table de
         # correspondance suffit : les id de modalité sont uniques par indicateur).
+        # `ids_agregat` retient les modalités marquées "total": true par l'API, une par
+        # dimension -- exclues de `region` (voir docstring ci-dessus).
         labels_modalite: dict[int, str] = {}
+        ids_agregat: set[int] = set()
         for dimension in indicateur_json.get("dimensions") or []:
             for modalite in dimension.get("modalites") or []:
                 labels_modalite[modalite["id"]] = modalite["label"].strip()
+                if modalite.get("total"):
+                    ids_agregat.add(modalite["id"])
 
         indicateurs: list[Indicateur] = []
         for cle, entree in (indicateur_json.get("data") or {}).items():
@@ -76,16 +104,24 @@ class ConstructeurIndicateurs:
             except ValueError:
                 continue
 
-            parties = cle.split("_")
-            periode = parties[-1]
+            # Le prefixe (ids de modalite) et la periode ne sont separes que par le
+            # DERNIER "_" -- rsplit(1) plutot que split, pour ne pas casser sur un "_"
+            # qui apparaitrait a l'interieur du prefixe (jamais observe en reel, mais
+            # plus sur que de supposer un seul "_" dans la cle entiere).
+            if "_" in cle:
+                prefixe, periode = cle.rsplit("_", 1)
+            else:
+                prefixe, periode = "", cle
             if periode not in periodes_valides:
                 continue  # clé de forme inattendue : on ignore plutôt que de mal l'interpréter
 
-            ids_modalite = parties[:-1]
+            # Ids de modalite joints par un POINT a l'interieur du prefixe (ex.
+            # "11.14.21" pour trois dimensions croisees) -- jamais par "_".
+            ids_modalite = prefixe.split(".") if prefixe else []
             labels = [
                 labels_modalite[int(mid)]
                 for mid in ids_modalite
-                if mid.isdigit() and int(mid) in labels_modalite
+                if mid.isdigit() and int(mid) in labels_modalite and int(mid) not in ids_agregat
             ]
             region = ", ".join(labels) if labels else None
 
