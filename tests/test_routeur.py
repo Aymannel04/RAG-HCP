@@ -47,10 +47,35 @@ def test_classifier_questions_notion(routeur, question):
     assert routeur.classifier(question) == TypeQuestion.NOTION
 
 
-def test_classifier_signal_narratif_prioritaire_sur_signal_chiffre(routeur):
-    # Cas cite dans docs/note_stockage_routage_benchmark.pdf : la question a les deux
-    # composantes, mais seul RetrievalReranker peut repondre au "pourquoi".
+def test_classifier_signal_narratif_combinable_et_chiffre_donne_mixte(routeur):
+    # Cas mixte resolu le 28/07 (cite dans docs/note_stockage_routage_benchmark.pdf,
+    # Q4) : la question a les deux composantes (pourquoi + taux de + annee), les deux
+    # chemins doivent maintenant etre sollicites et fusionnes (voir
+    # scripts/poser_question.py / Generateur.ContexteMixte), plutot que de tout miser
+    # sur RetrievalReranker seul comme avant.
     question = "Pourquoi le taux de chômage a-t-il augmenté en 2024 ?"
+    assert routeur.classifier(question) == TypeQuestion.MIXTE
+
+
+@pytest.mark.parametrize("question", [
+    # "pourquoi" seul, sans aucun signal chiffre -- doit rester NOTION pur (le
+    # croisement narratif combinable + chiffre est necessaire, pas narratif seul).
+    "Pourquoi le chômage a-t-il augmenté ces derniers trimestres ?",
+    "Pourquoi la population marocaine vieillit-elle ?",
+])
+def test_classifier_narratif_combinable_sans_signal_chiffre_reste_notion(routeur, question):
+    assert routeur.classifier(question) == TypeQuestion.NOTION
+
+
+@pytest.mark.parametrize("question", [
+    # Mots narratifs PUREMENT definitionnels/methodologiques : restent NOTION meme
+    # combines a un signal chiffre litteral (ex. "indice des"), parce que la question
+    # ne demande aucune valeur -- piege explicitement evite, voir docstring de module.
+    "Comment est calculé l'indice des prix à la consommation ?",
+    "Peux-tu m'expliquer la méthodologie du taux de chômage ?",
+    "Quelle est la différence entre taux d'activité et taux d'emploi ?",
+])
+def test_classifier_narratif_non_combinable_reste_notion_meme_avec_signal_chiffre(routeur, question):
     assert routeur.classifier(question) == TypeQuestion.NOTION
 
 
@@ -71,6 +96,11 @@ def test_classifier_appelle_le_llm_en_dernier_recours_si_injecte():
 def test_classifier_llm_peut_aussi_confirmer_notion():
     routeur = Routeur(fonction_classification_llm=lambda q: "NOTION")
     assert routeur.classifier(QUESTION_SANS_MOT_CLE) == TypeQuestion.NOTION
+
+
+def test_classifier_llm_peut_aussi_renvoyer_mixte():
+    routeur = Routeur(fonction_classification_llm=lambda q: "MIXTE")
+    assert routeur.classifier(QUESTION_SANS_MOT_CLE) == TypeQuestion.MIXTE
 
 
 def test_classifier_llm_qui_leve_une_exception_retombe_sur_notion():

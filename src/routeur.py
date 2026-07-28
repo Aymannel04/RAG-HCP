@@ -31,6 +31,25 @@ inattendue) est rattrapée et traitée comme "ne sait pas" -- ne fait jamais pla
 classification, se contente de retomber sur le même défaut NOTION qu'avant.
 Injectable au constructeur (même patron que `fonction_generation` de `Generateur`) :
 `llm_mistral.classifier_question` en production, une fonction factice dans les tests.
+
+Cas mixte implémenté le 28/07 (celui décrit dans note_stockage_routage_benchmark.pdf,
+Q4 de la synthèse Sprint 2/3 -- "pourquoi le chômage a-t-il augmenté ?" a une composante
+chiffrée ET narrative, seul RetrievalReranker répondait jusqu'ici, LookupStructure
+n'était jamais sollicité). `TypeQuestion.MIXTE` est renvoyé quand un signal narratif ET
+un signal chiffré sont TOUS LES DEUX présents -- `scripts/poser_question.py` interroge
+alors les deux chemins et `Generateur` fusionne les deux résultats (voir
+`ContexteMixte`).
+
+Piège évité : associer N'IMPORTE quel mot de `MOTS_NOTION` à un mot de `MOTS_CHIFFRE`
+suffirait à declarer MIXTE, mais casserait des questions purement notionnelles qui
+citent un nom d'indicateur sans rien demander de chiffré -- ex. "Comment est calculé
+l'indice des prix à la consommation ?" contient "indice des" (signal chiffré) ET
+"comment" (signal narratif), mais ne demande AUCUN chiffre, juste une méthodologie.
+D'où `MOTS_NOTION_COMBINABLES` : seul un sous-ensemble de `MOTS_NOTION` (ceux qui
+parlent d'évolution/cause d'une valeur, pas de définition/méthodologie) peut déclencher
+MIXTE en présence d'un signal chiffré. Les autres mots narratifs (comment, expliquer,
+définir, méthodologie, différence entre) gardent l'ancien comportement : NOTION pur,
+quel que soit ce qui les accompagne.
 """
 from __future__ import annotations
 
@@ -42,20 +61,26 @@ from typing import Callable, Optional
 class TypeQuestion(Enum):
     CHIFFRE = "chiffre"
     NOTION = "notion"
+    MIXTE = "mixte"
 
 
 # Signal narratif : présence d'une intention explicative (voir
-# docs/note_stockage_routage_benchmark.pdf, tableau "signal narratif"). Priorité sur le
-# signal chiffré ci-dessous : une question comme "pourquoi le chômage a-t-il augmenté ?"
-# a une composante chiffrée ET narrative, mais seul RetrievalReranker (recherche dans le
-# texte des rapports) peut répondre à la partie "pourquoi" -- LookupStructure ne renvoie
-# qu'une valeur brute, sans explication.
+# docs/note_stockage_routage_benchmark.pdf, tableau "signal narratif").
 MOTS_NOTION = [
     "pourquoi", "comment", "expliquer", "expliqu", "definir", "définir", "definition",
     "définition", "tendance", "evolution", "évolution", "analyse", "cause", "raison",
     "c'est quoi", "qu'est-ce que", "qu'est ce que", "methodologie", "méthodologie",
     "difference entre", "différence entre",
 ]
+
+# Sous-ensemble de MOTS_NOTION qui, combiné à un signal chiffré, déclenche MIXTE plutôt
+# que NOTION pur (voir docstring de module, section "Cas mixte implémenté le 28/07") --
+# uniquement les mots qui parlent d'évolution/cause d'une valeur dans le temps, jamais
+# les mots purement définitionnels/méthodologiques (qui restent NOTION pur même s'ils
+# citent un nom d'indicateur contenant un mot de MOTS_CHIFFRE).
+MOTS_NOTION_COMBINABLES = {
+    "pourquoi", "tendance", "evolution", "évolution", "analyse", "cause", "raison",
+}
 
 # Signal chiffré : la question porte sur une valeur précise, un indicateur, une
 # statistique isolée -- typiquement une question courte avec un mot-outil de mesure.
@@ -89,8 +114,8 @@ MOTS_CHIFFRE = [
 # renfort si aucun des deux dictionnaires ci-dessus n'a tranché.
 PATTERN_PERIODE = re.compile(r"\b(19|20)\d{2}\b|\bT[1-4]\b")
 
-# (question) -> "CHIFFRE" ou "NOTION" (toute autre valeur est traitee comme "ne sait
-# pas"). Voir docstring de module, section "V2 ajoutee le 28/07".
+# (question) -> "CHIFFRE", "NOTION" ou "MIXTE" (toute autre valeur est traitee comme "ne
+# sait pas"). Voir docstring de module, section "V2 ajoutee le 28/07".
 TypeFonctionClassification = Callable[[str], str]
 
 
@@ -107,27 +132,33 @@ class Routeur:
         self._fonction_classification_llm = fonction_classification_llm
 
     def classifier(self, question: str) -> TypeQuestion:
-        """Retourne TypeQuestion.CHIFFRE si la question porte sur une valeur précise
-        (indicateur, statistique), TypeQuestion.NOTION sinon (explication, méthodologie,
-        rapport).
+        """Retourne TypeQuestion.CHIFFRE si la question porte sur une valeur précise,
+        TypeQuestion.NOTION si elle porte sur une explication/méthodologie, ou
+        TypeQuestion.MIXTE si les deux signaux sont présents à la fois (voir docstring
+        de module, section "Cas mixte").
 
-        Ordre de décision : signal narratif d'abord (prioritaire, voir docstring de
-        module), puis signal chiffré, puis repli sur la présence d'une période
-        (signal faible), puis appel LLM en dernier recours si injecté (voir
-        `_fonction_classification_llm`), puis NOTION par défaut -- un faux négatif sur
-        NOTION bascule vers RetrievalReranker qui reste capable de faire remonter un
-        chiffre s'il apparaît dans le texte d'un rapport, alors qu'un faux négatif sur
-        CHIFFRE renverrait "indicateur non trouvé" sans aucune tentative de réponse.
+        Ordre de décision : signal mixte d'abord (le plus spécifique -- narratif
+        combinable ET chiffré tous les deux présents), puis narratif pur, puis chiffré
+        pur, puis repli sur la présence d'une période (signal faible), puis appel LLM en
+        dernier recours si injecté (voir `_fonction_classification_llm`), puis NOTION
+        par défaut -- un faux négatif sur NOTION bascule vers RetrievalReranker qui
+        reste capable de faire remonter un chiffre s'il apparaît dans le texte d'un
+        rapport, alors qu'un faux négatif sur CHIFFRE renverrait "indicateur non trouvé"
+        sans aucune tentative de réponse.
         """
         signal = question.lower().strip()
 
-        if any(mot in signal for mot in MOTS_NOTION):
+        a_signal_notion = any(mot in signal for mot in MOTS_NOTION)
+        a_signal_notion_combinable = any(mot in signal for mot in MOTS_NOTION_COMBINABLES)
+        a_signal_chiffre = any(mot in signal for mot in MOTS_CHIFFRE) or bool(PATTERN_PERIODE.search(signal))
+
+        if a_signal_notion_combinable and a_signal_chiffre:
+            return TypeQuestion.MIXTE
+
+        if a_signal_notion:
             return TypeQuestion.NOTION
 
-        if any(mot in signal for mot in MOTS_CHIFFRE):
-            return TypeQuestion.CHIFFRE
-
-        if PATTERN_PERIODE.search(signal):
+        if a_signal_chiffre:
             return TypeQuestion.CHIFFRE
 
         if self._fonction_classification_llm is not None:
@@ -139,9 +170,9 @@ class Routeur:
 
     def _classifier_via_llm(self, question: str) -> Optional[TypeQuestion]:
         """Dernier recours, appel défensif : toute exception (réseau, clé API absente,
-        timeout) ou réponse inattendue (ni "CHIFFRE" ni "NOTION") est traitée comme
-        "ne sait pas" -- ne fait jamais planter `classifier`, se contente de laisser
-        le repli NOTION habituel s'appliquer."""
+        timeout) ou réponse inattendue (ni "CHIFFRE", "NOTION" ni "MIXTE") est traitée
+        comme "ne sait pas" -- ne fait jamais planter `classifier`, se contente de
+        laisser le repli NOTION habituel s'appliquer."""
         try:
             resultat = self._fonction_classification_llm(question)
         except Exception:
@@ -151,4 +182,6 @@ class Routeur:
             return TypeQuestion.CHIFFRE
         if resultat_normalise == "NOTION":
             return TypeQuestion.NOTION
+        if resultat_normalise == "MIXTE":
+            return TypeQuestion.MIXTE
         return None

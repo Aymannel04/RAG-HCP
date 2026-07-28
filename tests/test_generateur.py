@@ -8,7 +8,7 @@ de generation factice (le vrai LLM reste a choisir, voir ADR 0002).
 import pytest
 
 from src.base_donnees import connecter, inserer_document
-from src.generateur import MESSAGE_SANS_INFORMATION, Generateur
+from src.generateur import MESSAGE_SANS_INFORMATION, ContexteMixte, Generateur
 from src.models import Chunk, Document, Indicateur
 
 
@@ -146,3 +146,87 @@ def test_generer_reponse_document_source_inconnu_ne_plante_pas(conn):
     )
     reponse = generateur.generer_reponse("Question", indicateur)
     assert reponse.source_url == ""
+
+
+# --- Chemin mixte (chiffre + narratif), ajoute le 28/07 -- voir docstring de module,
+# section "Chemin mixte", et src/routeur.py::TypeQuestion.MIXTE. -----------------------
+
+@pytest.fixture
+def id_document_narratif(conn):
+    # Document DISTINCT de id_document (la fiche BDS synthetique) -- represente un
+    # vrai rapport texte, pour tester la citation a deux sources.
+    return inserer_document(conn, Document(
+        id_document=None, url="https://www.hcp.ma/rapport-chomage.html",
+        titre="Note de conjoncture emploi", date_publication="2026-05-01", langue="fr",
+        categorie="Marche du travail", type="pdf",
+    ))
+
+
+def _indicateur_chomage(id_document):
+    return Indicateur(
+        id_indicateur=1, nom="Taux de chômage", valeur=13.3, unite="%",
+        periode="2024T2", region=None, id_document=id_document, code_bds="I4001",
+    )
+
+
+def test_generer_reponse_mixte_fusionne_chiffre_et_explication(conn, id_document, id_document_narratif):
+    appels = []
+
+    def fausse_generation(question: str, texte_contexte: str) -> str:
+        appels.append((question, texte_contexte))
+        return "La hausse s'explique par un ralentissement du secteur agricole."
+
+    generateur = Generateur(conn, fonction_generation=fausse_generation)
+    chunks = [Chunk(id_chunk=None, id_document=id_document_narratif, texte="Le secteur agricole a recule.", position=0)]
+    contexte = ContexteMixte(indicateur=_indicateur_chomage(id_document), chunks=chunks)
+
+    reponse = generateur.generer_reponse("Pourquoi le taux de chômage a-t-il augmenté ?", contexte)
+
+    # Le chiffre officiel apparait tel quel, produit par le gabarit deterministe --
+    # jamais reformule par le LLM (voir docstring de module).
+    assert "13.3%" in reponse.texte
+    assert "La hausse s'explique par un ralentissement du secteur agricole." in reponse.texte
+    # Deux sources distinctes, puisque le chiffre et le texte narratif viennent de
+    # deux documents differents.
+    assert reponse.source_url == "https://bds.hcp.ma/main/indicators/I4001"
+    assert reponse.source_url_secondaire == "https://www.hcp.ma/rapport-chomage.html"
+    assert reponse.source_titre_secondaire == "Note de conjoncture emploi"
+
+    # Le chiffre est bien fourni au LLM, pour que son explication reste coherente.
+    assert len(appels) == 1
+    _, texte_contexte = appels[0]
+    assert "13.3" in texte_contexte
+
+
+def test_generer_reponse_mixte_meme_document_pas_de_source_secondaire(conn, id_document):
+    generateur = Generateur(conn, fonction_generation=lambda q, c: "Explication.")
+    chunks = [Chunk(id_chunk=None, id_document=id_document, texte="Meme document que l'indicateur.", position=0)]
+    contexte = ContexteMixte(indicateur=_indicateur_chomage(id_document), chunks=chunks)
+
+    reponse = generateur.generer_reponse("Pourquoi ?", contexte)
+
+    assert reponse.source_url_secondaire is None
+
+
+def test_generer_reponse_mixte_sans_chunks_degrade_vers_chiffre_seul(conn, id_document):
+    generateur = Generateur(conn, fonction_generation=lambda q, c: "Explication.")
+    contexte = ContexteMixte(indicateur=_indicateur_chomage(id_document), chunks=[])
+
+    reponse = generateur.generer_reponse("Pourquoi ?", contexte)
+
+    assert "13.3%" in reponse.texte
+    assert "Explication." not in reponse.texte
+    assert reponse.source_url_secondaire is None
+
+
+def test_generer_reponse_mixte_sans_fonction_generation_degrade_vers_chiffre_seul(conn, id_document, id_document_narratif):
+    # Aucun LLM injecte : contrairement au chemin notion pur (qui leve une erreur), le
+    # chemin mixte degrade proprement vers le chiffre seul -- une reponse partielle
+    # honnete plutot qu'un echec complet, puisque le chiffre ne necessite jamais de LLM.
+    generateur = Generateur(conn)  # pas de fonction_generation
+    chunks = [Chunk(id_chunk=None, id_document=id_document_narratif, texte="Texte.", position=0)]
+    contexte = ContexteMixte(indicateur=_indicateur_chomage(id_document), chunks=chunks)
+
+    reponse = generateur.generer_reponse("Pourquoi ?", contexte)
+
+    assert "13.3%" in reponse.texte

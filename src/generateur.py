@@ -27,6 +27,18 @@ Décisions d'implémentation :
   mémoire ne portent que `id_document`, pas le titre/URL/date de la publication source
   -- nécessaires pour la citation (exigence NF3, traçabilité). Même patron que
   `LookupStructure(conn)`.
+- **Chemin mixte (contexte = `ContexteMixte`), ajouté le 28/07** : cas décrit dans
+  note_stockage_routage_benchmark.pdf (Q4), jamais implémenté jusque-là -- une question
+  comme "pourquoi le chômage a-t-il augmenté ?" a une composante chiffrée ET narrative.
+  `Routeur.classifier` renvoie désormais `TypeQuestion.MIXTE` pour ce cas (voir
+  `src/routeur.py`) et `scripts/poser_question.py` interroge les deux chemins en
+  parallèle. Ici, la fusion respecte le même principe fondateur que le chemin chiffré
+  seul : **le chiffre lui-même reste toujours produit par le gabarit déterministe**,
+  jamais reformulé par le LLM -- celui-ci ne sert qu'à expliquer le "pourquoi", avec le
+  chiffre officiel injecté dans son contexte pour que son explication reste cohérente
+  avec la valeur déjà citée (zéro risque que le LLM invente un chiffre différent dans sa
+  partie de la réponse). Dégradation propre si un des deux chemins ne trouve rien :
+  réponse chiffrée seule, ou notion seule, plutôt qu'un échec complet.
 
 """
 from __future__ import annotations
@@ -44,6 +56,21 @@ class Reponse:
     source_url: str
     source_titre: str
     source_date: Optional[str] = None
+    # Renseignes uniquement pour une reponse mixte dont les deux sources (l'indicateur
+    # BDS et le document narratif) sont distinctes -- voir _generer_reponse_mixte.
+    # `source_*` ci-dessus reste la source du CHIFFRE dans ce cas (le plus verifiable
+    # des deux, coherent avec le principe "chiffre = gabarit deterministe").
+    source_url_secondaire: Optional[str] = None
+    source_titre_secondaire: Optional[str] = None
+    source_date_secondaire: Optional[str] = None
+
+
+@dataclass
+class ContexteMixte:
+    """Contexte du chemin mixte (voir docstring de module) : un indicateur exact ET des
+    chunks narratifs, tous deux trouves pour la meme question."""
+    indicateur: Indicateur
+    chunks: list[Chunk]
 
 
 TypeFonctionGeneration = Callable[[str, str], str]  # (question, texte_contexte) -> reponse
@@ -69,7 +96,9 @@ class Generateur:
         self._conn = conn
         self._fonction_generation = fonction_generation
 
-    def generer_reponse(self, question: str, contexte: Union[list[Chunk], Indicateur, None]) -> Reponse:
+    def generer_reponse(
+        self, question: str, contexte: Union[list[Chunk], Indicateur, ContexteMixte, None]
+    ) -> Reponse:
         """Rédige une réponse sourcée à partir du contexte fourni.
 
         Contrainte de grounding strict : si `contexte` est vide/None, la réponse doit
@@ -79,6 +108,9 @@ class Generateur:
         if contexte is None or (isinstance(contexte, list) and not contexte):
             return Reponse(texte=MESSAGE_SANS_INFORMATION, source_url="", source_titre="", source_date=None)
 
+        if isinstance(contexte, ContexteMixte):
+            return self._generer_reponse_mixte(question, contexte)
+
         if isinstance(contexte, Indicateur):
             return self._generer_reponse_chiffree(contexte)
 
@@ -87,14 +119,20 @@ class Generateur:
     # --- Chemin chiffre : gabarit, aucun LLM (voir docstring de module) --------------
 
     def _generer_reponse_chiffree(self, indicateur: Indicateur) -> Reponse:
+        texte = self._phrase_chiffree(indicateur)
+        titre, url, date_publication = self._recuperer_document(indicateur.id_document)
+        return Reponse(texte=texte, source_url=url, source_titre=titre, source_date=date_publication)
+
+    def _phrase_chiffree(self, indicateur: Indicateur) -> str:
+        """Gabarit déterministe partagé par le chemin chiffré seul et le chemin mixte
+        (voir `_generer_reponse_mixte`) -- factorisé pour ne jamais dupliquer la seule
+        logique qui produit le chiffre lui-même dans une phrase."""
         region = f", {indicateur.region}" if indicateur.region else ""
         unite = self._unite_formatee(indicateur.unite)
-        texte = (
+        return (
             f"D'après les données du HCP, {indicateur.nom} s'élève à "
             f"{indicateur.valeur:g}{unite} pour la période {indicateur.periode}{region}."
         )
-        titre, url, date_publication = self._recuperer_document(indicateur.id_document)
-        return Reponse(texte=texte, source_url=url, source_titre=titre, source_date=date_publication)
 
     @staticmethod
     def _unite_formatee(unite: Optional[str]) -> str:
@@ -133,6 +171,41 @@ class Generateur:
 
         titre, url, date_publication = self._recuperer_document(chunks[0].id_document)
         return Reponse(texte=texte, source_url=url, source_titre=titre, source_date=date_publication)
+
+    # --- Chemin mixte : gabarit chiffre + explication LLM groundee, voir docstring ---
+
+    def _generer_reponse_mixte(self, question: str, contexte: ContexteMixte) -> Reponse:
+        phrase_chiffree = self._phrase_chiffree(contexte.indicateur)
+        titre_chiffre, url_chiffre, date_chiffre = self._recuperer_document(contexte.indicateur.id_document)
+
+        if not contexte.chunks or self._fonction_generation is None:
+            # Pas de contexte narratif exploitable (rien trouve par RetrievalReranker,
+            # ou aucun LLM configure) : degradation propre vers le chiffre seul plutot
+            # que d'echouer completement -- meme philosophie que le repli CHIFFRE ->
+            # NOTION deja documente dans scripts/poser_question.py.
+            return Reponse(texte=phrase_chiffree, source_url=url_chiffre, source_titre=titre_chiffre, source_date=date_chiffre)
+
+        # Le chiffre officiel est injecte EN TETE du contexte fourni au LLM, pour que
+        # son explication du "pourquoi" reste coherente avec la valeur deja citee
+        # ci-dessus -- le LLM explique, il ne reformule jamais le chiffre lui-meme
+        # (voir docstring de module).
+        texte_contexte = (
+            f"Chiffre officiel a mentionner tel quel si utile : {phrase_chiffree}\n\n"
+            + "\n\n".join(chunk.texte for chunk in contexte.chunks)
+        )
+        explication = self._fonction_generation(question, texte_contexte)
+        texte = f"{phrase_chiffree} {explication}"
+
+        titre_notion, url_notion, date_notion = self._recuperer_document(contexte.chunks[0].id_document)
+        if url_notion == url_chiffre:
+            # Meme document source (rare mais possible, ex. fiche synthetique BDS citee
+            # aussi comme chunk) : pas besoin d'une seconde citation redondante.
+            return Reponse(texte=texte, source_url=url_chiffre, source_titre=titre_chiffre, source_date=date_chiffre)
+
+        return Reponse(
+            texte=texte, source_url=url_chiffre, source_titre=titre_chiffre, source_date=date_chiffre,
+            source_url_secondaire=url_notion, source_titre_secondaire=titre_notion, source_date_secondaire=date_notion,
+        )
 
     # --- Utilitaire ---------------------------------------------------------------
 

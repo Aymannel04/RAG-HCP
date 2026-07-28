@@ -71,12 +71,16 @@ def generer(question: str, texte_contexte: str) -> str:
 PROMPT_SYSTEME_CLASSIFICATION = (
     "Tu classes une question posee a un systeme de questions-reponses sur les "
     "statistiques publiques du Maroc (HCP). Reponds UNIQUEMENT par le mot CHIFFRE si "
-    "la question porte sur une valeur, un chiffre, une statistique precise -- meme "
-    "formulee sans les mots 'taux' ou 'nombre' (ex. structure, repartition, part, "
-    "effectif, evolution d'une valeur dans le temps). Reponds UNIQUEMENT par le mot "
-    "NOTION si la question porte sur une explication, une definition, une "
-    "methodologie, un pourquoi/comment, ou une analyse. Ne reponds rien d'autre que "
-    "CHIFFRE ou NOTION, aucune ponctuation, aucune explication."
+    "la question demande une valeur, un chiffre, une statistique precise, sans rien "
+    "demander d'autre -- meme formulee sans les mots 'taux' ou 'nombre' (ex. structure, "
+    "repartition, part, effectif). Reponds UNIQUEMENT par le mot MIXTE si la question "
+    "demande A LA FOIS une valeur chiffree ET une explication de son evolution ou de sa "
+    "cause (ex. 'pourquoi le chomage a-t-il augmente ?'). Reponds UNIQUEMENT par le mot "
+    "NOTION si la question porte sur une explication, une definition, une methodologie, "
+    "ou une difference entre deux notions, SANS demander de valeur chiffree precise "
+    "(ex. 'comment est calcule l'indice des prix ?' reste NOTION meme si elle cite un "
+    "nom d'indicateur). Ne reponds rien d'autre que CHIFFRE, MIXTE ou NOTION, aucune "
+    "ponctuation, aucune explication."
 )
 
 

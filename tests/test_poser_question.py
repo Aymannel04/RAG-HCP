@@ -121,3 +121,65 @@ def test_question_notion_sans_rien_en_index_renvoie_message_explicite(conn, rera
     generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
     reponse = poser_question(conn, reranker, routeur, generateur, "C'est quoi le RGPH ?")
     assert "n'ai pas trouvé" in reponse.texte
+
+
+# --- Cas mixte (ajoute le 28/07) : dispatch parallele LookupStructure +
+# RetrievalReranker, fusion via Generateur.ContexteMixte. -----------------------------
+
+def test_question_mixte_avec_indicateur_et_texte_fusionne_les_deux(conn, indexeur, reranker, routeur):
+    id_document_indicateur = inserer_document(conn, Document(
+        id_document=None, url="https://bds.hcp.ma/main/indicators/I4001",
+        titre="Taux de chômage", date_publication="2026-06-01", langue="fr",
+        categorie="Marche du travail", type="api",
+    ))
+    inserer_indicateur(conn, Indicateur(
+        id_indicateur=None, nom="Taux de chômage", valeur=13.3, unite="%",
+        periode="2024T2", region=None, id_document=id_document_indicateur, code_bds="I4001",
+    ))
+    id_document_rapport = inserer_document(conn, Document(
+        id_document=None, url="https://www.hcp.ma/rapport-chomage.html",
+        titre="Note de conjoncture emploi", date_publication="2026-05-01", langue="fr",
+        categorie="Marche du travail", type="pdf",
+    ))
+    indexeur.indexer(
+        Document(id_document=id_document_rapport, url="x", titre="x", date_publication=None,
+                 langue="fr", categorie="", type="pdf"),
+        "Le chômage a augmenté ce trimestre en raison d'un recul du secteur agricole.",
+    )
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+
+    reponse = poser_question(
+        conn, reranker, routeur, generateur,
+        "Pourquoi le taux de chômage a-t-il augmenté ?",
+    )
+
+    # Le chiffre exact (gabarit deterministe) ET l'explication generee sont presents.
+    assert "13.3" in reponse.texte
+    assert "reponse generee" in reponse.texte
+    assert reponse.source_url == "https://bds.hcp.ma/main/indicators/I4001"
+    assert reponse.source_url_secondaire == "https://www.hcp.ma/rapport-chomage.html"
+
+
+def test_question_mixte_sans_indicateur_degrade_vers_notion_seul(conn, indexeur, reranker, routeur):
+    # Question mixte mais aucun indicateur en base : repli propre vers le chemin
+    # notion seul, comme documente dans poser_question.
+    id_document = inserer_document(conn, Document(
+        id_document=None, url="https://www.hcp.ma/rapport-chomage.html",
+        titre="Note de conjoncture emploi", date_publication="2026-05-01", langue="fr",
+        categorie="Marche du travail", type="pdf",
+    ))
+    indexeur.indexer(
+        Document(id_document=id_document, url="x", titre="x", date_publication=None,
+                 langue="fr", categorie="", type="pdf"),
+        "Le chômage a augmenté ce trimestre en raison d'un recul du secteur agricole.",
+    )
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+
+    reponse = poser_question(
+        conn, reranker, routeur, generateur,
+        "Pourquoi le taux de chômage a-t-il augmenté ?",
+    )
+
+    assert "reponse generee" in reponse.texte
+    assert reponse.source_url == "https://www.hcp.ma/rapport-chomage.html"
+    assert reponse.source_url_secondaire is None
