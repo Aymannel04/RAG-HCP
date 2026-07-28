@@ -712,3 +712,163 @@ de stage en fin de période, pas besoin d'être exhaustif.
   `region`) maquille en taux feminin general -- pire que l'actuelle reponse
   agregee honnete. Documente comme limite connue dans TODO.md, a traiter
   proprement dans un sprint dedie plutot qu'en correctif rapide.
+
+## 28 juillet 2026 — filtrage demographique corrige, decouverte d'une base locale perimee
+
+- Avant de resoudre la limite ci-dessus, inspection de `data/hcp_rag.db` (vraie base,
+  pas les tests) pour voir les formes reelles du champ `region` par indicateur --
+  demande explicite d'Ayman de ne pas se limiter a sexe/milieu/age. Resultat : le
+  champ `region` sert en realite a stocker n'importe quelle ventilation BDS, pas
+  seulement geographique -- confirme 3 autres familles reellement presentes dans les
+  18 indicateurs cures : niveau de diplome (`Structure des actifs occupes` : "Sans
+  diplome"/"Niveau moyen"/"Niveau superieur"), branche d'activite (17 valeurs reelles
+  sur `Valeurs ajoutees...`, dont deux pseudo-agregats "PIB"/"PIB hors agriculture"),
+  et un libelle d'agregat incoherent selon l'indicateur ("National" pour certains,
+  "Total" pour d'autres, jamais NULL alors que la logique d'origine supposait NULL =
+  agregat).
+- Decouverte annexe non prevue : la base locale actuelle ne contient que 1895 lignes
+  d'indicateurs au total, contre les 35561 lignes documentees le 21/07 (voir plus
+  haut). I1590 et I3287, qui avaient alors respectivement 6757 et 1072 lignes
+  ventilees reelles, n'ont aujourd'hui plus que des lignes agregees (`region IS
+  NULL`) -- la base semble avoir ete reinitialisee/reduite depuis, sans trace dans ce
+  journal. Signale a Ayman : `python -m scripts.preremplir_indicateurs_bds` doit etre
+  relance sur sa machine pour reconstituer les vraies donnees ventilees avant de
+  pouvoir demontrer le filtrage demographique en conditions reelles.
+- Correctif implemente dans `src/lookup_structure.py` : dictionnaire de synonymes par
+  categorie de dimension (milieu/sexe/niveau de diplome/branche d'activite,
+  extensible), resolution generique de la ventilation demandee (eclatement de
+  `region` en labels individuels, recherche de la combinaison la plus precise qui
+  couvre tous les labels demandes), et refus explicite (renvoie `None`) en cas
+  d'ambiguite entre plusieurs combinaisons aussi precises -- au lieu de deviner.
+  Corrige au passage un bug latent distinct : les indicateurs sans aucune ligne
+  agregee (ex. diplome uniquement) pouvaient renvoyer une categorie arbitraire comme
+  si elle representait toute la population ; renvoie desormais `None` dans ce cas.
+- 7 nouveaux tests (`tests/test_lookup_structure.py`), donnees realistes pour chaque
+  cas : croisement sans ligne marginale (refus attendu), croisement avec ligne
+  marginale (resolution attendue), dimension simple avec/sans label agregat,
+  diplome, branche d'activite. Suite complete : 102/102, aucune regression.
+- Reste a valider en conditions reelles une fois la base repeuplee (voir
+  decouverte ci-dessus) : verifier si l'API BDS publie de vraies lignes marginales
+  par sexe seul pour I4001/I3287/I1590, ou si elle ne publie que des croisements
+  complets -- dans ce dernier cas `LookupStructure` continuera de repondre `None`
+  honnetement plutot que par le mauvais chiffre, mais la fonctionnalite restera
+  moins utile qu'espere. Limite mise a jour dans TODO.md.
+
+## 28 juillet 2026 (suite) — vraie cause racine : bug de parsing des cles dimension, pas une limite de donnees
+
+- Ayman relance `python -m scripts.preremplir_indicateurs_bds` en reel : 35561 lignes,
+  0 echec, coherent avec le run du 21/07 -- la base etait bien perimee, maintenant
+  reconstituee. Test immediat : `poser_question.py "Quel est le taux de chomage des
+  femmes ?"` repond 9% pour 2025.
+- Verification : 9% est l'agregat national d'I4001, pas le taux feminin -- confirme
+  en inspectant `data/hcp_rag.db` directement (une seule valeur de `region` pour
+  I4001/I3287/I1590 : `None`). Pas coherent avec les 6757/1072 lignes "ventilees"
+  documentees le 21/07 pour I1590/I3287 -- ces lignes existaient bien en nombre, mais
+  avaient DEJA `region=None` a l'epoque (mal interprete a tort comme des lignes
+  ventilees dans la relecture du journal du matin).
+- Script de diagnostic cree (`scripts/diagnostic_dimensions.py`) pour afficher la
+  reponse API brute d'un indicateur. Ayman le lance sur I4001 : `dimensions` N'EST
+  PAS vide -- 3 dimensions reelles (Milieu, Age, Sexe), chacune avec plusieurs
+  modalites ET une modalite marquee `"total": true` (l'agregat de cette dimension
+  precise : "National" pour Milieu, "15 ans et plus" pour Age, "Total" pour Sexe).
+  540 entrees dans `data`, cles de la forme `"11.14.21_2014"`.
+- Cause racine identifiee : `ConstructeurIndicateurs.structurer_depuis_bds` supposait
+  (docstring d'origine, jamais verifie contre un indicateur reellement multi-
+  dimensions avant aujourd'hui) que les ids de modalite etaient joints par `"_"`
+  comme la periode. En realite ils sont joints par un POINT a l'interieur d'un seul
+  segment separe de la periode par `"_"` (`"11.14.21_2014"`, pas
+  `"11_14_21_2014"`). `cle.split("_")` sur cette forme reelle donne `["11.14.21",
+  "2014"]` : le prefixe `"11.14.21"` echoue `str.isdigit()` (a cause des points) et
+  est silencieusement rejete -- `region` tombe TOUJOURS a `None`, pour absolument
+  toutes les lignes de tout indicateur a plusieurs dimensions croisees. I3181
+  (branche d'activite, UNE seule dimension) n'etait jamais touche par ce bug -- ses
+  cles n'ont jamais eu besoin de points (`"250_2007T1"`). D'ou l'illusion d'un
+  probleme de correspondance de synonymes cote `LookupStructure` (limite documentee
+  le 21/07) : le vrai probleme etait en amont, dans la construction meme de
+  `indicateur.region`.
+- Corrige : `structurer_depuis_bds` fait maintenant `cle.rsplit("_", 1)` (isole la
+  periode par le dernier `"_"`) puis `prefixe.split(".")` (eclate les ids de
+  modalite). Exploite aussi le flag `"total": true` de l'API : les modalites
+  agregees sont exclues de `region`, qui ne garde que les dimensions reellement
+  specifiques -- une ligne "sexe=Feminin, milieu=agrege, age=agrege" donne
+  `region="Feminin"`, pas une longue chaine avec les labels d'agregat inclus. Une
+  ligne entierement agregee (toutes dimensions a leur modalite total) donne
+  `region=None`, coherent avec la convention deja utilisee pour les indicateurs sans
+  ventilation du tout.
+- Effet de bord decouvert en ecrivant le test de regression : le vrai label BDS pour
+  "Feminin" n'a PAS d'accent (`"Feminin"`, verifie sur la reponse reelle d'I4001),
+  alors que `src/lookup_structure.py` utilisait `"Féminin"` (accentue) comme valeur
+  canonique dans son dictionnaire de synonymes -- une simple egalite de chaine entre
+  le canonique et les vrais labels aurait donc echoue silencieusement, meme apres le
+  fix de `structurer_depuis_bds`. Corrige : la resolution passe maintenant par une
+  forme normalisee (accents retires) des deux cotes plutot que par egalite stricte,
+  qui tolere aussi bien "Feminin" que "Féminin" cote donnees reelles.
+- 2 nouveaux tests de regression (forme de cle reelle d'I4001 sur
+  `ConstructeurIndicateurs`, label BDS non accentue sur `LookupStructure`). Suite
+  complete : 104/104.
+- A refaire par Ayman : relancer `preremplir_indicateurs_bds` une derniere fois (le
+  code de parsing a change depuis le dernier remplissage) puis retester la question
+  sur les femmes -- devrait cette fois refleter une vraie ligne "Feminin" si l'API la
+  publie effectivement (probable vu la modalite "total" explicite par dimension).
+- **Confirme** : Ayman relance le pre-remplissage (35561 lignes, 0 echec) puis
+  `poser_question.py "Quel est le taux de chomage des femmes ?"` -> **20.5% (2025,
+  Feminin)**, different des 9% de l'agregat national obtenus avant le fix. Chaine
+  complete validee : parsing des cles -> `region="Feminin"` en base ->
+  `LookupStructure` la retrouve sans ambiguite -> `Generateur` la mentionne dans la
+  reponse et cite la source BDS. Limite du 21/07 (filtrage demographique) et son vrai
+  bug racine (parsing des cles dimension) tous deux definitivement resolus.
+
+## 28 juillet 2026 (suite 2) — trou distinct trouve dans Routeur en testant d'autres domaines
+
+- Ayman teste "Quelle est la structure des actifs occupés sans diplôme ?" (question
+  suggeree pour couvrir le cas diplome explicite sur I2863) : reponse plausible et
+  sourcee (47.2% national / 36.9% urbain / 59.7% rural), MAIS source = un rapport PDF
+  ("Activité, emploi et chômage, résultats annuels 2025"), pas l'URL BDS de
+  l'indicateur -- signe que la question est passee par RetrievalReranker/NOTION, pas
+  par LookupStructure/CHIFFRE. Le correctif du jour sur la ventilation n'a donc pas
+  ete sollicite du tout ici.
+- Cause : `src/routeur.py`, liste `MOTS_CHIFFRE` ne contenait que des tournures
+  centrees sur "taux"/"nombre"/"valeur"/"indice"/"pourcentage" -- "structure des
+  actifs occupés" ne matche aucun mot-cle des deux listes (`MOTS_NOTION` non plus),
+  et le classifieur retombe sur NOTION par defaut (comportement volontaire, docstring
+  du module : plus sur de sur-classer NOTION que CHIFFRE). Degradation propre (la
+  reponse reste correcte et sourcee via le texte), mais le chemin chiffre exact
+  n'est jamais tente.
+- Corrige : ajout de tournures reelles (`structure de/des`, `répartition de/des`,
+  `part de/des`, `proportion de/des`, `effectif de/des`, `espérance de vie`,
+  `valeurs ajoutées`, `population de/du`) a `MOTS_CHIFFRE`, choisies en reprenant les
+  vrais noms d'indicateurs cures (`data/indicateurs_cures.py`) plutot que devinees au
+  hasard. 7 nouveaux tests de regression (`tests/test_routeur.py`), suite complete :
+  111/111.
+- A confirmer par Ayman : retester "Quelle est la structure des actifs occupés sans
+  diplôme ?" -- devrait maintenant citer directement l'indicateur BDS (I2863) via
+  LookupStructure plutot qu'un rapport PDF via RetrievalReranker.
+
+## 28 juillet 2026 (suite 3) — Routeur : filet de securite LLM en dernier recours
+
+- Proposition d'Ayman suite au trou trouve juste avant : plutot que de completer
+  `MOTS_CHIFFRE`/`MOTS_NOTION` a la main a chaque nouveau cas trouve (jeu perdant a
+  long terme), ajouter un appel LLM pour les questions qu'aucune des deux listes ne
+  sait classer. Idee deja evoquee dans
+  `docs/note_stockage_routage_benchmark.pdf` (V2, explicitement repoussee a l'epoque
+  en faveur d'une V1 heuristique) -- jamais implementee jusqu'ici.
+- Implemente comme filet de securite, pas comme remplacement : `Routeur.__init__`
+  accepte `fonction_classification_llm` optionnelle (meme patron d'injection que
+  `fonction_generation` de `Generateur`), appelee uniquement si `MOTS_NOTION`,
+  `MOTS_CHIFFRE` et `PATTERN_PERIODE` n'ont RIEN tranche -- l'heuristique reste le
+  chemin principal (rapide, gratuit, deterministe), le LLM n'intervient que sur les
+  cas vraiment ambigus. Appel entierement defensif : exception reseau, cle API
+  absente, ou reponse inattendue (autre chose que "CHIFFRE"/"NOTION") sont toutes
+  traitees comme "ne sait pas" et retombent sur le meme defaut NOTION qu'avant --
+  aucune regression possible meme si le LLM est indisponible.
+- Nouvelle fonction `llm_mistral.classifier_question` (prompt dedie, temperature 0.0,
+  timeout 15s) injectee dans `scripts/poser_question.py`.
+- 8 nouveaux tests avec fonctions factices (`tests/test_routeur.py`) : CHIFFRE/NOTION
+  renvoyes par le LLM, exception qui ne fait pas planter, reponse inattendue qui
+  retombe sur NOTION, normalisation espaces/casse, ET un test qui prouve que le LLM
+  n'est JAMAIS appele quand l'heuristique a deja tranche (fonction factice qui leve
+  une AssertionError si appelee). Suite complete : 118/118.
+- A tester par Ayman en conditions reelles : poser une question chiffree avec un
+  vocabulaire volontairement absent des deux listes (ex. "Quel est le montant des
+  exportations marocaines ?" -- "montant" n'est dans aucune liste) et verifier que le
+  LLM la reclasse correctement en CHIFFRE plutot que de tomber sur NOTION.

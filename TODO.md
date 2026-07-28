@@ -177,8 +177,25 @@ jointes tout du long.
 
 Backlog :
 - [x] Routeur de question (`Routeur.classifier`) — heuristique de mots-clés (pas de LLM,
-      voir docstring du module), 11 tests. Signal narratif prioritaire sur signal chiffré
+      voir docstring du module), 18 tests. Signal narratif prioritaire sur signal chiffré
       (question mixte type "pourquoi le chômage a-t-il augmenté" -> NOTION).
+      **Complété le 28/07** : `MOTS_CHIFFRE` ne couvrait que "taux"/"nombre"/"valeur"/
+      "indice"/"pourcentage" — une question chiffrée réelle comme "structure des actifs
+      occupés" ne matchait aucun mot-clé et tombait par défaut sur NOTION (dégradation
+      propre mais chemin CHIFFRE jamais tenté). Ajout de tournures réelles (structure,
+      répartition, part de, proportion, effectif, espérance de vie, valeurs ajoutées,
+      population) tirées des noms d'indicateurs curés.
+      **V2 ajoutée le 28/07** (celle évoquée dans
+      `docs/note_stockage_routage_benchmark.pdf`, jamais implémentée jusque-là) :
+      `Routeur` accepte maintenant `fonction_classification_llm` optionnelle, appelée
+      en DERNIER RECOURS seulement (jamais si l'heuristique a déjà tranché) — filet de
+      sécurité pour les formulations qu'aucune liste de mots-clés ne pourra jamais
+      couvrir entièrement. Toute erreur (réseau, clé API absente, réponse inattendue)
+      retombe sur le même défaut NOTION qu'avant, aucune régression si rien n'est
+      injecté. Branché en production dans `scripts/poser_question.py` avec
+      `llm_mistral.classifier_question` (nouvelle fonction, température 0). 8 nouveaux
+      tests avec fonctions factices (dont un qui vérifie explicitement que le LLM
+      n'est jamais appelé quand l'heuristique suffit). Suite complète : 118/118.
 - [x] Lookup structuré (`LookupStructure.rechercher_indicateur`) — correspondance par
       recouvrement de tokens contre les noms d'indicateurs réels en base (libellés BDS),
       extraction région/période, requête SQL exacte, repli si période/région non
@@ -227,18 +244,61 @@ renvoyant None pour basculer sur RetrievalReranker), et sensibilité aux accents
 Unicode). **Sprint 3 validé en conditions réelles sur ses deux scénarios**
 (figures 5 et 6). Suite complète : 95/95.
 
-**Limite connue, non corrigée volontairement (21/07)** : `LookupStructure` ne filtre
-pas par sexe/milieu/groupe d'âge quand la question les mentionne en langage naturel
-("pour les femmes") — les libellés BDS ("Féminin"/"Masculin") ne partagent aucun mot
-avec "femmes"/"hommes", donc aucune correspondance, retombe sur la ligne agrégée
-(tous sexes confondus) sans le signaler. Repéré en test réel
-(`"Quel est le taux de chômage pour les femmes"` -> renvoie le taux national, pas le
-taux féminin). Pas de correctif rapide sûr : ces indicateurs croisent souvent
-sexe + milieu + groupe d'âge simultanément dans le même champ `region` — un mapping
-de synonymes naïf risquerait de renvoyer un sous-groupe très spécifique (ex. "femmes
-urbaines 15-24 ans") maquillé en taux féminin général, pire que la réponse agrégée
-actuelle. À traiter proprement dans un sprint dédié (dictionnaire de synonymes +
-désambiguïsation des dimensions croisées), pas en correctif à la volée.
+**Limite corrigée le 28/07** : `LookupStructure` ne filtrait pas par sexe/milieu/
+groupe d'âge/niveau de diplôme/branche d'activité quand la question les mentionne en
+langage naturel ("pour les femmes") — les libellés BDS ("Féminin"/"Masculin") ne
+partageaient aucun mot avec "femmes"/"hommes", donc aucune correspondance, retombait
+sur la ligne agrégée sans le signaler. Corrigé par un dictionnaire de synonymes par
+catégorie de dimension (milieu, sexe, niveau de diplôme, branche d'activité — pas
+seulement sexe/milieu/âge, voir inspection réelle de `data/hcp_rag.db` du 28/07) +
+une règle de désambiguïsation : si plusieurs combinaisons de labels sont aussi
+précises l'une que l'autre pour satisfaire la demande, `LookupStructure` refuse de
+trancher (renvoie `None`, le Routeur bascule sur RetrievalReranker) plutôt que de
+deviner un sous-groupe — exactement le risque identifié le 21/07 ("femmes urbaines
+15-24 ans" maquillé en taux féminin général), maintenant explicitement écarté au lieu
+d'être esquivé en ne traitant pas le cas. Corrige aussi un bug latent découvert
+pendant l'inspection : certains indicateurs (ex. "Structure des actifs occupés") n'ont
+aucune ligne agrégée du tout (seulement des lignes par diplôme) — l'ancien code
+pouvait renvoyer une catégorie arbitraire comme si elle représentait toute la
+population ; le nouveau code renvoie `None` dans ce cas plutôt qu'un chiffre trompeur.
+Voir `src/lookup_structure.py` (docstring de module, section "Ventilation") et
+`tests/test_lookup_structure.py` (7 nouveaux tests).
+
+**Vraie cause racine trouvée et corrigée le 28/07 (suite)** : après re-population de
+`data/hcp_rag.db` (35561 lignes, cohérent avec le run du 21/07), test réel de
+`poser_question.py "Quel est le taux de chômage des femmes ?"` — répondait 9%, qui
+s'est avéré être l'agrégat national, pas le taux féminin. Diagnostic
+(`scripts/diagnostic_dimensions.py I4001`, réponse API brute) : ce n'était pas une
+limite de données, mais un **bug de parsing** dans
+`ConstructeurIndicateurs.structurer_depuis_bds` — l'hypothèse initiale sur la forme
+des clés de `data` était fausse. Vraie forme réelle : les ids de modalité de
+plusieurs dimensions croisées sont joints par un **point** dans la clé (ex.
+`"11.14.21_2014"` = milieu.âge.sexe), jamais par `"_"` comme le code le supposait.
+`cle.split("_")` traitait donc `"11.14.21"` comme un seul id non numérique et le
+rejetait silencieusement (`if mid.isdigit()`) → `region` retombait TOUJOURS à `None`
+pour tout indicateur à plusieurs dimensions croisées (I4001, I3287, I1590), même
+quand l'API renvoyait bel et bien une vraie ventilation avec des centaines de lignes
+distinctes. Découverte annexe utile : chaque dimension a une modalité marquée
+`"total": true` par l'API elle-même (ex. Milieu→"National", Âge→"15 ans et plus",
+Sexe→"Total") — ces modalités sont maintenant explicitement exclues de `region`
+plutôt que reconnues par une liste de mots-clés fragile, donc une ligne où seule la
+dimension sexe est spécifique donne `region="Feminin"` (label BDS réel, sans accent)
+plutôt que `region="Feminin, National, 15 ans et plus"`. Corrigé dans
+`src/constructeur_indicateurs.py` (parsing des clés + filtrage par flag `total`) et
+`src/lookup_structure.py` (résolution de synonyme désormais robuste aux variantes
+d'accentuation des labels BDS eux-mêmes, pas seulement de la question — "Feminin"
+sans accent observé en réel alors que le dictionnaire de synonymes utilisait
+"Féminin"). 1 nouveau test de régression sur `ConstructeurIndicateurs` (forme de clé
+réelle d'I4001) + 1 sur `LookupStructure` (label BDS non accentué). Suite complète :
+104/104.
+
+**Validé en conditions réelles le 28/07** : après relance de
+`python -m scripts.preremplir_indicateurs_bds` (parsing corrigé),
+`python -m scripts.poser_question "Quel est le taux de chômage des femmes ?"` répond
+**20.5% (2025, Feminin)**, distinct des 9% de l'agrégat national — confirme que l'API
+BDS publie bien une ligne marginale par sexe pour I4001, et que toute la chaîne
+(parsing → `LookupStructure` → `Generateur`, qui mentionne "Feminin" dans la réponse
+et cite la source) fonctionne de bout en bout. Limite du 21/07 définitivement résolue.
 
 ---
 
