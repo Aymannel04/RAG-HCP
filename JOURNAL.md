@@ -920,3 +920,59 @@ de stage en fin de période, pas besoin d'être exhaustif.
   `python -m scripts.poser_question "Pourquoi le taux de chomage a-t-il augmente ?"`
   devrait maintenant citer le chiffre exact ET une explication sourcee, potentiellement
   deux sources distinctes.
+
+## 28 juillet 2026 (suite 5) — cache Redis + historique de conversation
+
+- Ajout demande par Ayman en dehors du planning initial, explicitement pour la
+  pratique de Redis (choix confirme via question directe : "je veux bien learn redis
+  donc je pense on perd rien si on le fait") -- pas une necessite de performance, SQLite
+  tient sans probleme au volume actuel (35561 lignes). Deux besoins distincts geres
+  dans le meme module par souci de coherence (meme client Redis injectable) :
+  - `CacheReponses` : cache question -> reponse, pour eviter de rappeler le LLM sur une
+    question deja posee. Scope volontairement restreint au chemin NOTION pur (confirme
+    par Ayman : "juste les questions an relation avec narratif") -- le chemin CHIFFRE
+    est deja une requete SQL directe (rien a gagner), et le chemin MIXTE en est
+    explicitement exclu pour ne jamais resservir un chiffre potentiellement perime a
+    cote d'une explication figee. TTL 24h, aligne sur le cycle de rafraichissement du
+    corpus (`decouverte_publications.py --quotidien`) pour ne jamais ignorer une
+    publication nouvellement indexee.
+  - `HistoriqueConversation` : historique de conversation par session, enregistre
+    toutes les questions quel que soit leur type (c'est un journal pour l'interface,
+    pas une optimisation). Cle = `id_session`, generee et retenue par l'interface
+    (Streamlit aujourd'hui), jamais par ce module -- decision volontaire pour rester
+    deployable ailleurs qu'en Streamlit un jour (discute explicitement avec Ayman :
+    "l'utilisation de streamlit est juste pour cette version de prototype, what if we
+    wanna deploy it otherwise").
+- Correspondance question -> cache choisie EXACTE pour cette V1 (question normalisee :
+  minuscules, espaces reduits), pas semantique -- confirme par Ayman ("le plus pratique
+  et le faire en premier temps et embedding semantique en deuxieme temps"). Une
+  correspondance semantique reste une extension V2 possible, avec le risque de faux
+  positif a calibrer d'abord.
+- `redis` et `fakeredis` installables via pip dans le sandbox (contrairement a un vrai
+  serveur Redis, qui necessite root/sudo, indisponibles ici) -- `fakeredis` fournit un
+  faux serveur en memoire avec la meme API, suffisant pour tester toute la logique de
+  branchement sans jamais faire tourner de vrai serveur.
+- `src/cache_redis.py` (nouveau) : `normaliser_question`, `CacheReponses`,
+  `HistoriqueConversation`. Meme patron d'injection que partout ailleurs dans le
+  projet (`client_redis=None` par defaut, degradation silencieuse -- jamais d'erreur
+  si Redis absent, un cache absent doit se comporter comme un cache qui rate toujours).
+  13 tests avec `fakeredis` (`tests/test_cache_redis.py`).
+- Cable dans `scripts/poser_question.py` : `poser_question` accepte `cache`/
+  `historique`/`id_session`, tous optionnels et `None` par defaut -- aucune regression
+  possible sur les appels existants (verifie explicitement par un test de non-
+  regression). Cache verifie seulement dans la branche NOTION (avant ET apres calcul :
+  hit -> reponse retournee directement sans reranker ni generation ; miss -> calcul
+  normal puis enregistrement). Historique ajoute a la toute fin, apres le calcul,
+  quel que soit le chemin emprunte. `main()` tente une connexion a un vrai serveur
+  Redis local (`localhost:6379`) et se degrade silencieusement si indisponible
+  (`_connecter_redis`, capture toute exception).
+- 7 nouveaux tests de cablage dans `tests/test_poser_question.py`, dont un avec un
+  faux reranker qui leve une erreur s'il est appele (preuve que le cache hit
+  court-circuite bien tout recalcul), et un qui verifie que le cache reste vide apres
+  une question CHIFFRE ou MIXTE. Suite complete : 150/150, aucune regression sur les
+  130 tests existants.
+- `requirements.txt` (`redis>=5.0`, `fakeredis>=2.20`) et `README.md` (section
+  installation Redis local, WSL ou Docker) mis a jour.
+- Reste a valider en conditions reelles par Ayman : lancer un vrai serveur Redis
+  (WSL/Docker), reposer deux fois la meme question notionnelle et confirmer que la
+  deuxieme fois ne rappelle pas Mistral.

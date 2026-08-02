@@ -27,15 +27,27 @@ qu'un échec complet si un seul des deux chemins trouve quelque chose : chiffre+
 trouvés -> réponse fusionnée ; chiffre seul trouvé -> réponse chiffrée seule ; chunks
 seuls trouvés -> réponse notion seule ; rien trouvé -> message explicite d'absence
 d'information (voir Generateur.generer_reponse).
+
+Cache + historique (ajoutés le 28/07 -- voir src/cache_redis.py) : `cache` et
+`historique` sont injectables, tous deux `None` par défaut -- comportement inchangé si
+absents, aucune régression possible sur les appels existants (même patron que tous les
+autres paramètres injectables du projet). Le cache ne s'applique QU'AU chemin NOTION
+pur (dernier `else` ci-dessous) : le chemin CHIFFRE est déjà une requête SQL directe,
+rien à gagner à le cacher, et le chemin MIXTE est délibérément exclu (son chiffre doit
+rester à jour à chaque appel -- voir docstring de src/cache_redis.py). L'historique,
+lui, enregistre TOUTES les questions quel que soit leur type : c'est un journal de
+conversation pour l'interface, pas une optimisation de calcul.
 """
 from __future__ import annotations
 
 import sys
+import uuid
 from pathlib import Path
 from typing import Optional
 
 from src import llm_mistral
 from src.base_donnees import connecter
+from src.cache_redis import CacheReponses, HistoriqueConversation
 from src.generateur import ContexteMixte, Generateur, Reponse
 from src.indexeur_texte import IndexeurTexte
 from src.lookup_structure import LookupStructure
@@ -49,6 +61,9 @@ def poser_question(
     routeur: Routeur,
     generateur: Generateur,
     question: str,
+    cache: Optional[CacheReponses] = None,
+    historique: Optional[HistoriqueConversation] = None,
+    id_session: Optional[str] = None,
 ) -> Reponse:
     """Implémente les figures 5 et 6, plus le scénario mixte (voir docstring de
     module) : classifie la question, suit le(s) chemin(s) correspondant(s), avec repli
@@ -59,34 +74,69 @@ def poser_question(
     reranking factice (voir tests/test_poser_question.py) sans provoquer le
     téléchargement du vrai modèle -- même raisonnement que l'injection de
     `fonction_embedding`/`fonction_generation` ailleurs dans le projet.
+
+    `cache`/`historique` : voir docstring de module. `id_session` est ignoré si
+    `historique` est `None` (rien à indexer sans backend), et inversement aucun
+    historique n'est enregistré si `id_session` est `None` (pas de clé sous laquelle
+    ranger l'entrée) -- les deux sont nécessaires ensemble, jamais l'un sans l'autre.
     """
     type_question = routeur.classifier(question)
 
     if type_question == TypeQuestion.CHIFFRE:
         indicateur = LookupStructure(conn).rechercher_indicateur(question)
         if indicateur is not None:
-            return generateur.generer_reponse(question, indicateur)
-        # Repli documenté (voir docstring de module) : pas d'indicateur exact trouve,
-        # on retente via la recherche textuelle plutot que d'abandonner.
-        chunks = reranker.rechercher_et_trier(question)
-        return generateur.generer_reponse(question, chunks)
+            reponse = generateur.generer_reponse(question, indicateur)
+        else:
+            # Repli documenté (voir docstring de module) : pas d'indicateur exact
+            # trouve, on retente via la recherche textuelle plutot que d'abandonner.
+            chunks = reranker.rechercher_et_trier(question)
+            reponse = generateur.generer_reponse(question, chunks)
 
-    if type_question == TypeQuestion.MIXTE:
+    elif type_question == TypeQuestion.MIXTE:
         # Dispatch parallele : les deux chemins sont interroges, quoi qu'il arrive.
         indicateur = LookupStructure(conn).rechercher_indicateur(question)
         chunks = reranker.rechercher_et_trier(question)
         if indicateur is not None:
             # Generateur degrade proprement tout seul si `chunks` est vide (voir
             # ContexteMixte / _generer_reponse_mixte) -- pas besoin de le refaire ici.
-            return generateur.generer_reponse(question, ContexteMixte(indicateur=indicateur, chunks=chunks))
-        # Aucun indicateur trouve du tout : repli sur le chemin notion seul.
-        return generateur.generer_reponse(question, chunks)
+            reponse = generateur.generer_reponse(question, ContexteMixte(indicateur=indicateur, chunks=chunks))
+        else:
+            # Aucun indicateur trouve du tout : repli sur le chemin notion seul.
+            reponse = generateur.generer_reponse(question, chunks)
 
-    chunks = reranker.rechercher_et_trier(question)
-    return generateur.generer_reponse(question, chunks)
+    else:
+        # TypeQuestion.NOTION -- seul chemin mis en cache (voir docstring de module).
+        reponse_en_cache = cache.obtenir(question) if cache is not None else None
+        if reponse_en_cache is not None:
+            reponse = reponse_en_cache
+        else:
+            chunks = reranker.rechercher_et_trier(question)
+            reponse = generateur.generer_reponse(question, chunks)
+            if cache is not None:
+                cache.enregistrer(question, reponse)
+
+    if historique is not None and id_session is not None:
+        historique.ajouter(id_session, question, reponse)
+
+    return reponse
 
 
-def main(question: str, chemin_db: Optional[Path] = None) -> None:
+def _connecter_redis():
+    """Tente une connexion a un serveur Redis local (voir README.md pour
+    l'installation). Renvoie `None` si indisponible (pas de serveur lance, paquet
+    absent, etc.) -- degradation silencieuse, coherente avec CacheReponses/
+    HistoriqueConversation qui savent tourner sans client (voir src/cache_redis.py) :
+    le script continue de fonctionner normalement, juste sans cache ni historique."""
+    try:
+        import redis
+        client = redis.Redis(host="localhost", port=6379, decode_responses=True)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
+def main(question: str, chemin_db: Optional[Path] = None, id_session: Optional[str] = None) -> None:
     conn = connecter(chemin_db)
     try:
         indexeur = IndexeurTexte()
@@ -100,7 +150,19 @@ def main(question: str, chemin_db: Optional[Path] = None) -> None:
         # meme sans cle configuree (voir Generateur).
         generateur = Generateur(conn, fonction_generation=llm_mistral.generer)
 
-        reponse = poser_question(conn, reranker, routeur, generateur, question)
+        # Cache + historique (voir docstring de module) : un seul client Redis pour
+        # les deux. `id_session` genere ici si absent -- un appel CLI, c'est une
+        # session a lui seul ; une vraie interface (Streamlit ou autre) generera et
+        # retiendra son propre id_session sur toute la duree d'une conversation.
+        client_redis = _connecter_redis()
+        cache = CacheReponses(client_redis)
+        historique = HistoriqueConversation(client_redis)
+        id_session = id_session or str(uuid.uuid4())
+
+        reponse = poser_question(
+            conn, reranker, routeur, generateur, question,
+            cache=cache, historique=historique, id_session=id_session,
+        )
 
         print(f"Question : {question}")
         print(f"Reponse  : {reponse.texte}")

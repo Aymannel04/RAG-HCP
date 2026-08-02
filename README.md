@@ -66,6 +66,16 @@ MISTRAL_API_KEY=ta_cle_ici
 
 Le chemin "chiffre" (questions sur un indicateur précis) fonctionne sans cette clé.
 
+Pour le cache de réponses et l'historique de conversation (ajoutés le 28/07, voir
+`src/cache_redis.py`) : un serveur Redis local, facultatif. `scripts/poser_question.py`
+tente une connexion à `localhost:6379` et se dégrade silencieusement si aucun serveur
+n'est disponible (aucune erreur, juste pas de cache/historique). Sous Windows, deux
+options simples : Redis via **WSL** (`sudo apt install redis-server`, puis
+`redis-server` dans le terminal WSL) ou via **Docker** (`docker run -p 6379:6379
+redis`). Rien à configurer côté projet au-delà de `pip install -r requirements.txt`
+(qui installe déjà `redis`) — les tests, eux, utilisent `fakeredis` (faux serveur en
+mémoire) et n'ont besoin d'aucun serveur réel.
+
 ## Lancer les tests
 
 ```bash

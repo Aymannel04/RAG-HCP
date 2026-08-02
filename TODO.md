@@ -316,6 +316,28 @@ BDS publie bien une ligne marginale par sexe pour I4001, et que toute la chaîne
 (parsing → `LookupStructure` → `Generateur`, qui mentionne "Feminin" dans la réponse
 et cite la source) fonctionne de bout en bout. Limite du 21/07 définitivement résolue.
 
+**Cache Redis + historique de conversation ajoutés le 28/07 (suite)** — décidé avec
+Ayman en dehors du planning initial, explicitement pour la pratique de Redis (pas une
+nécessité de performance au volume actuel, SQLite tient très bien à 35561 lignes) :
+`src/cache_redis.py` (`CacheReponses` : cache question -> réponse normalisée
+exactement, TTL 24h aligné sur `decouverte_publications.py --quotidien`, scopé au
+chemin NOTION uniquement — le chemin CHIFFRE est déjà une requête SQL instantanée,
+le chemin MIXTE est délibérément exclu pour ne jamais resservir un chiffre périmé ;
+`HistoriqueConversation` : historique par session, décorrélé de Streamlit — voir
+docstring de module pour le raisonnement complet). Câblé dans
+`scripts/poser_question.py` (`poser_question` accepte `cache`/`historique`/
+`id_session`, tous optionnels et `None` par défaut, donc aucune régression sur les
+appels existants ; `main()` tente une connexion à un vrai serveur Redis local et se
+dégrade silencieusement si absent). Correspondance exacte choisie pour cette V1
+(correspondance sémantique par embeddings prévue en V2 si utile, une fois la V1
+validée en conditions réelles). 20 nouveaux tests (`tests/test_cache_redis.py` avec
+`fakeredis`, plus 7 tests de câblage dans `tests/test_poser_question.py` : cache hit
+court-circuite le reranker, cache jamais touché par CHIFFRE/MIXTE, historique
+enregistré quel que soit le type de question). Suite complète : 150/150.
+**Reste à valider en conditions réelles** : lancer un vrai serveur Redis sur la
+machine d'Ayman (WSL ou Docker, voir README.md) et confirmer le cache hit/l'historique
+avec `poser_question.py` en usage répété.
+
 ---
 
 ## Sprint 4 (28 juillet - 3 août) — Interface + évaluation
