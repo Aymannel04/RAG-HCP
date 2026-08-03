@@ -334,9 +334,13 @@ validée en conditions réelles). 20 nouveaux tests (`tests/test_cache_redis.py`
 `fakeredis`, plus 7 tests de câblage dans `tests/test_poser_question.py` : cache hit
 court-circuite le reranker, cache jamais touché par CHIFFRE/MIXTE, historique
 enregistré quel que soit le type de question). Suite complète : 150/150.
-**Reste à valider en conditions réelles** : lancer un vrai serveur Redis sur la
-machine d'Ayman (WSL ou Docker, voir README.md) et confirmer le cache hit/l'historique
-avec `poser_question.py` en usage répété.
+**Validé en conditions réelles le 28/07 (suite)** : Redis lancé via Docker Desktop sur
+la machine d'Ayman. `python -m scripts.poser_question "C'est quoi le RGPH ?"` lancé
+deux fois de suite -> deuxième réponse identique mot pour mot à la première, confirmant
+le cache hit sans rappel à Mistral. (Piège rencontré au passage : `requirements.txt`
+mis à jour après la création du venv d'Ayman -> `redis` absent du venv ->
+`_connecter_redis()` dégradait silencieusement sans prévenir. Résolu par
+`pip install -r requirements.txt`.)
 
 ---
 

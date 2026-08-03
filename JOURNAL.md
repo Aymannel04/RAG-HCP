@@ -973,6 +973,16 @@ de stage en fin de période, pas besoin d'être exhaustif.
   130 tests existants.
 - `requirements.txt` (`redis>=5.0`, `fakeredis>=2.20`) et `README.md` (section
   installation Redis local, WSL ou Docker) mis a jour.
-- Reste a valider en conditions reelles par Ayman : lancer un vrai serveur Redis
-  (WSL/Docker), reposer deux fois la meme question notionnelle et confirmer que la
-  deuxieme fois ne rappelle pas Mistral.
+- **Valide en conditions reelles le 28/07 (suite)** : Redis lance via Docker Desktop
+  (`docker run -d --name redis-hcp -p 6379:6379 redis`). Premier obstacle reel,
+  attendu vu le patron de degradation silencieuse du projet : le paquet Python
+  `redis` manquait dans le venv d'Ayman (`requirements.txt` mis a jour apres la
+  creation du venv, jamais reinstalle) -- `_connecter_redis()` avalait l'erreur sans
+  prevenir, le cache tournait a vide sans message. Diagnostique en testant
+  directement `redis.Redis(...).ping()` en dehors du script, meme demarche que les
+  bugs precedents du 28/07 (diagnostic isole avant de re-tester le pipeline complet).
+  Corrige par `pip install -r requirements.txt`. Une fois le paquet installe :
+  `python -m scripts.poser_question "C'est quoi le RGPH ?"` lance deux fois de suite
+  -> deuxieme reponse identique mot pour mot a la premiere, confirmant que le cache
+  sert bien la reponse en cache sans rappeler Mistral. Cache Redis + historique
+  entierement valides, code et conditions reelles.
