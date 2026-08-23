@@ -2,35 +2,38 @@
 Module Reformulateur — ajouté le 23/08, pour la mémoire conversationnelle (voir
 JOURNAL.md et discussion avec Ayman, 23/08). N'existait pas dans la conception
 d'origine (les 9 modules de docs/conception_uml_v3.pdf) : ajouté pour la même raison
-que src/cache_redis.py -- un besoin réel découvert en testant l'interface Streamlit
-en conditions réelles, pas anticipé au départ.
+que src/cache_redis.py -- un besoin réel découvert en testant l'interface Streamlit en
+conditions réelles, pas anticipé au départ.
 
 Problème observé : `Routeur`/`LookupStructure`/`RetrievalReranker` classifient et
 cherchent uniquement sur le texte brut de LA question posée, sans jamais tenir compte
 des échanges précédents. Une vraie conversation contient forcément des questions de
 suivi qui ne se comprennent qu'avec ce contexte -- ex. "explique ce chiffre" après une
-réponse chiffrée, ou "et en 2023 ?" après une question sur le chômage. Sans reformuler
-ces questions en version autonome, la recherche part sur un texte qui ne veut rien dire
-tout seul et ne trouve rien de pertinent (cas réel observé le 23/08, voir JOURNAL.md).
+réponse chiffrée, ou "du derniere annee ?" après une question sur la population. Sans
+reformuler ces questions en version autonome, la recherche part sur un texte qui ne veut
+rien dire tout seul et ne trouve rien de pertinent.
 
-Décision d'implémentation (Option C, choisie explicitement par Ayman après discussion
-des compromis -- voir échange du 23/08) : approche HYBRIDE, pas une reformulation
-systématique.
+Historique de la decision (voir JOURNAL.md, 23/08) : une premiere version (Option C)
+essayait de deviner, via une heuristique de mots-cles (`ressemble_a_un_followup`), si
+UNE question donnee ressemblait a un follow-up ambigu avant de declencher la
+reformulation. Abandonnee le jour meme : testee en conditions reelles, "du derniere
+annee ?" n'a matche AUCUN mot-cle de la liste et a ete envoyee telle quelle au Routeur,
+qui est parti chercher un texte incomprehensible dans les documents. Objection d'Ayman,
+fondee : une liste de mots-cles ne peut structurellement pas couvrir toutes les
+formulations possibles d'une question de suivi en francais -- le meme bug reapparaitrait
+sous une autre formulation a chaque fois, un jeu du chat et de la souris sans fin.
 
-1. Une heuristique bon marché (`ressemble_a_un_followup`, aucun appel LLM) décide
-   d'abord si la question RESSEMBLE à un follow-up ambigu -- mêmes principes que les
-   heuristiques de `src/routeur.py` (mots-clés + repli sur un signal plus faible).
-2. Seulement si cette heuristique se déclenche ET qu'un historique existe pour cette
-   session, un appel LLM (`fonction_reformulation`, injectable comme partout ailleurs
-   dans le projet -- `llm_mistral.reformuler_question` en production) réécrit la
-   question en version autonome à partir des derniers échanges.
-3. Toute question déjà autonome (la majorité) ne paie donc aucun coût supplémentaire :
-   comportement inchangé, zéro appel LLM en plus -- même philosophie que le fallback
-   LLM du Routeur ("heuristique d'abord, LLM seulement en dernier recours ciblé").
-4. Défensif comme partout ailleurs (voir Routeur._classifier_via_llm) : toute exception
-   (réseau, clé API absente, réponse vide) fait retomber sur la question ORIGINALE
-   plutôt que de faire planter tout le pipeline -- dégradation propre, jamais pire que
-   le comportement d'avant l'ajout de ce module.
+Decision retenue : abandonner toute tentative de DEVINER si une question a besoin de
+contexte a partir de son seul texte. A la place, se fier au seul fait fiable a 100% --
+un historique existe-t-il deja pour cette session ? Si oui (ce n'est pas la premiere
+question de la conversation), la question est SYSTEMATIQUEMENT reformulee en tenant
+compte des derniers echanges avant classification/recherche. Si c'est la premiere
+question (aucun historique), rien a reformuler, donc aucun cout ajoute sur le premier
+tour de toute facon. Compromis assume : a partir du 2e tour, une question deja autonome
+paie quand meme un appel LLM (qui la renverra alors quasiment inchangee) -- moins
+economique qu'un bon filtre heuristique, mais fiable a 100%, contrairement a une liste
+de mots-cles qui aura toujours un angle mort. Tier gratuit Mistral (~1 milliard de
+tokens/mois, voir src/llm_mistral.py) : cout reel negligeable pour ce projet.
 
 Ce que ce module NE fait PAS : il ne touche jamais à `HistoriqueConversation` (stockage
 inchangé, toujours indexé sous la question originale telle que tapée par l'utilisateur,
@@ -40,58 +43,9 @@ jamais ce qui est affiché ou journalisé.
 """
 from __future__ import annotations
 
-import re
-import unicodedata
 from typing import Callable, Optional
 
 TypeFonctionReformulation = Callable[[str, str], str]  # (question, historique_texte) -> question reformulee
-
-
-def _normaliser(texte: str) -> str:
-    forme_decomposee = unicodedata.normalize("NFD", texte)
-    return "".join(c for c in forme_decomposee if unicodedata.category(c) != "Mn")
-
-
-# Mots-outils exclus du comptage de "tokens de contenu" (voir `ressemble_a_un_followup`,
-# signal 2) -- meme liste que src/lookup_structure.py::MOTS_OUTILS, dupliquee ici plutot
-# que partagee pour garder les deux modules independants (aucune dependance croisee
-# necessaire, chacun reste utilisable seul).
-MOTS_OUTILS = {
-    "le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "et", "en", "au", "aux",
-    "est", "sont", "quel", "quelle", "quels", "quelles", "ce", "cette", "ces", "pour",
-    "sur", "dans", "actuel", "actuelle", "selon", "par", "j", "ai", "as", "a", "pas",
-    "que", "qui", "tu", "t",
-}
-
-# Signal 1 : mots/expressions qui trahissent explicitement une reference au contexte
-# precedent plutot qu'un sujet exprime en toutes lettres (liste volontairement courte,
-# meme esprit que MOTS_NOTION/MOTS_CHIFFRE du Routeur -- affinable avec l'usage reel).
-MOTS_FOLLOWUP = [
-    "ça", "ca", "cela", "ce chiffre", "cette valeur", "ce nombre", "meme chose",
-    "et pour", "et en", "et si", "et la", "explique", "pourquoi ce", "pourquoi cette",
-    "comment ça", "comment ca", "qu'est-ce que ça veut dire", "tu as dit", "t'as dit",
-    "comme tu as dit",
-]
-
-
-def ressemble_a_un_followup(question: str) -> bool:
-    """Heuristique bon marche (aucun appel LLM) : la question a-t-elle des chances de
-    ne pas se comprendre sans le contexte de la conversation precedente ?
-
-    Deux signaux (voir docstring de module) :
-    1. Un mot/expression explicitement referentiel (MOTS_FOLLOWUP) est present.
-    2. Une fois les mots-outils retires, il reste au plus 1 mot de contenu -- la
-       question est trop courte/vague pour porter un sujet complet a elle seule (ex.
-       "explique" seul, ou "et en 2023 ?" qui ne contient qu'un chiffre d'annee).
-    """
-    signal = _normaliser(question.lower().strip())
-
-    if any(mot in signal for mot in MOTS_FOLLOWUP):
-        return True
-
-    tokens = re.findall(r"\w+", signal)
-    tokens_contenu = [t for t in tokens if t not in MOTS_OUTILS]
-    return len(tokens_contenu) <= 1
 
 
 def _formater_historique(entrees_historique: list[dict], max_echanges: int = 3) -> str:
@@ -112,25 +66,25 @@ def reformuler_si_necessaire(
 ) -> str:
     """Point d'entree unique utilise par scripts/poser_question.py : renvoie la
     question a utiliser pour la classification/recherche/generation -- la question
-    ORIGINALE si aucune reformulation n'est necessaire ou possible, sinon la version
+    ORIGINALE si aucune reformulation n'est possible ou necessaire, sinon la version
     reformulee par `fonction_reformulation`.
 
-    Ne reformule JAMAIS si :
-    - il n'y a aucun historique pour cette session (rien a reformuler a partir de) ;
-    - aucune fonction de reformulation n'est injectee (comportement par defaut
-      inchange, meme patron que cache/historique/classification LLM ailleurs) ;
-    - la question ne ressemble pas a un follow-up ambigu (voir
-      `ressemble_a_un_followup`) -- c'est le coeur de l'Option C : pas d'appel LLM sur
-      une question deja autonome.
+    Ne reformule QUE si les deux conditions sont reunies (voir docstring de module,
+    section "Decision retenue") :
+    - un historique existe deja pour cette session (sinon rien a reformuler a partir
+      de -- c'est la premiere question, aucun cout ajoute) ;
+    - une fonction de reformulation est injectee (comportement par defaut inchange si
+      absente, meme patron que cache/historique/classification LLM ailleurs).
+
+    Aucune tentative de deviner si LA question precise en a "besoin" -- voir
+    l'historique de la decision dans le docstring de module : une heuristique de
+    mots-cles a ete essayee et abandonnee car peu fiable.
 
     Degradation propre : toute exception levee par `fonction_reformulation` (reseau,
     cle API absente, etc.) ou une reponse vide fait retomber sur la question originale,
     jamais d'echec de tout le pipeline pour ce module optionnel.
     """
     if not entrees_historique or fonction_reformulation is None:
-        return question
-
-    if not ressemble_a_un_followup(question):
         return question
 
     historique_texte = _formater_historique(entrees_historique)

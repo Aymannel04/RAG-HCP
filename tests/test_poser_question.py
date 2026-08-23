@@ -402,7 +402,9 @@ def test_question_followup_avec_historique_est_reformulee_avant_la_recherche(con
         fonction_reformulation=fausse_reformulation,
     )
 
-    # La fonction de reformulation a bien ete appelee (question courte = follow-up).
+    # La fonction de reformulation a bien ete appelee (un historique existe pour
+    # cette session -- condition unique depuis l'abandon de l'heuristique de
+    # mots-cles, voir docstring de src/reformulateur.py).
     assert len(appels_reformulation) == 1
     assert appels_reformulation[0][0] == "explique"
     assert "RGPH" in appels_reformulation[0][1]
@@ -412,7 +414,12 @@ def test_question_followup_avec_historique_est_reformulee_avant_la_recherche(con
     assert entrees[-1]["question"] == "explique"
 
 
-def test_question_autonome_avec_historique_najamais_appelle_la_reformulation(conn, indexeur, reranker, routeur, historique):
+def test_question_deja_autonome_avec_historique_est_quand_meme_reformulee(conn, indexeur, reranker, routeur, historique):
+    # Decision retenue le 23/08 (voir docstring de src/reformulateur.py) : une premiere
+    # version tentait de deviner via des mots-cles si LA question avait besoin d'etre
+    # reformulee, abandonnee car peu fiable en conditions reelles. Depuis, des qu'un
+    # historique existe, la reformulation est SYSTEMATIQUE -- meme une question deja
+    # parfaitement autonome declenche l'appel (elle en ressort quasiment inchangee).
     id_document = inserer_document(conn, Document(
         id_document=None, url="https://www.hcp.ma/rgph.html", titre="Le RGPH expliqué",
         date_publication="2026-06-01", langue="fr", categorie="Population et demographie", type="pdf",
@@ -423,21 +430,43 @@ def test_question_autonome_avec_historique_najamais_appelle_la_reformulation(con
         "Le RGPH est le recensement general de la population et de l'habitat, mene tous les 10 ans.",
     )
     generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
-    historique.ajouter("session-test", "C'est quoi le RGPH ?", Reponse(
-        texte="Le RGPH est un recensement.", source_url="https://www.hcp.ma/rgph.html",
-        source_titre="Le RGPH expliqué", source_date="2026-06-01",
+    historique.ajouter("session-test", "Une question precedente", Reponse(
+        texte="Une reponse precedente.", source_url="https://www.hcp.ma/autre.html",
+        source_titre="Autre document", source_date="2026-06-01",
     ))
 
-    def fonction_qui_ne_doit_jamais_etre_appelee(question, historique_texte):
-        raise AssertionError("ne doit pas etre appelee pour une question deja autonome")
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(question)
+        return question  # deja autonome : renvoyee quasiment telle quelle
 
     reponse = poser_question(
         conn, reranker, routeur, generateur, "C'est quoi le RGPH ?",
         historique=historique, id_session="session-test",
+        fonction_reformulation=fonction_reformulation,
+    )
+
+    assert len(appels) == 1
+    assert appels[0] == "C'est quoi le RGPH ?"
+    assert "reponse generee" in reponse.texte
+
+
+def test_premiere_question_de_la_session_najamais_appelle_la_reformulation(conn, reranker, routeur, historique):
+    # Aucun historique pour cette session (premiere question) : rien a reformuler a
+    # partir de, la fonction ne doit jamais etre appelee -- aucun cout ajoute sur le
+    # premier tour d'une conversation.
+    def fonction_qui_ne_doit_jamais_etre_appelee(question, historique_texte):
+        raise AssertionError("ne doit pas etre appelee sans historique existant")
+
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+    reponse = poser_question(
+        conn, reranker, routeur, generateur, "C'est quoi le RGPH ?",
+        historique=historique, id_session="session-nouvelle",
         fonction_reformulation=fonction_qui_ne_doit_jamais_etre_appelee,
     )
 
-    assert "reponse generee" in reponse.texte
+    assert "n'ai pas trouvé" in reponse.texte
 
 
 def test_question_followup_sans_fonction_reformulation_comportement_inchange(conn, reranker, routeur):

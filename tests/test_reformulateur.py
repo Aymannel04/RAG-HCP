@@ -1,103 +1,84 @@
-"""Tests de src/reformulateur.py : l'heuristique `ressemble_a_un_followup` est pure
-(pas de dependance externe), `reformuler_si_necessaire` est testee avec des fonctions de
+"""Tests de src/reformulateur.py::reformuler_si_necessaire, avec des fonctions de
 reformulation factices (meme esprit que les fonctions embedding/reranking/generation
-factices ailleurs dans le projet)."""
+factices ailleurs dans le projet).
+
+Pas de test d'heuristique de detection de follow-up ici : une premiere version basee
+sur des mots-cles (`ressemble_a_un_followup`) a ete essayee puis abandonnee le 23/08,
+testee en conditions reelles ("du derniere annee ?" n'a matche aucun mot-cle) -- voir
+docstring de module. La regle actuelle est purement structurelle (un historique
+existe-t-il ?), donc rien a tester au niveau du contenu de la question elle-meme."""
 import pytest
 
-from src.reformulateur import reformuler_si_necessaire, ressemble_a_un_followup
+from src.reformulateur import reformuler_si_necessaire
 
-
-# --- ressemble_a_un_followup ----------------------------------------------------------
-
-@pytest.mark.parametrize("question", [
-    "explique",
-    "explique ça",
-    "comment ça",
-    "et pour 2023 ?",
-    "et en 2023 ?",
-    "pourquoi ce chiffre ?",
-    "tu as dit 43562, comment ça ?",
-    "meme chose pour les femmes ?",
-])
-def test_ressemble_a_un_followup_positifs(question):
-    assert ressemble_a_un_followup(question) is True
-
-
-@pytest.mark.parametrize("question", [
-    "Quel est le taux de chômage actuel ?",
-    "C'est quoi le RGPH ?",
-    "Quelle est la population du Maroc ?",
-    "Pourquoi le chômage a-t-il augmenté ces derniers trimestres ?",
-    "Quelle est la différence entre taux d'activité et taux d'emploi ?",
-])
-def test_ressemble_a_un_followup_negatifs_questions_autonomes(question):
-    assert ressemble_a_un_followup(question) is False
-
-
-def test_ressemble_a_un_followup_question_tres_courte_sans_mot_cle():
-    # Aucun mot de MOTS_FOLLOWUP, mais une fois les mots-outils retires il ne reste
-    # qu'un seul mot de contenu ("population") -- trop vague pour etre autonome.
-    assert ressemble_a_un_followup("la population ?") is True
-
-
-# --- reformuler_si_necessaire ---------------------------------------------------------
 
 def _historique_factice():
     return [
         {
             "question": "population de maroc",
-            "reponse": {"texte": "D'après les données du HCP, ... s'élève à 43562 ... pour la période 2050."},
+            "reponse": {"texte": "D'après les données du HCP, ... s'élève à 38050 ... pour la période 2026."},
         },
     ]
 
 
 def test_reformuler_si_necessaire_sans_historique_renvoie_la_question_originale():
+    # Premiere question de la session : rien a reformuler a partir de, aucun cout ajoute.
     resultat = reformuler_si_necessaire(
-        "explique", entrees_historique=[], fonction_reformulation=lambda q, h: "PEU IMPORTE",
+        "Quel est le taux de chômage ?", entrees_historique=[], fonction_reformulation=lambda q, h: "PEU IMPORTE",
     )
-    assert resultat == "explique"
+    assert resultat == "Quel est le taux de chômage ?"
 
 
 def test_reformuler_si_necessaire_sans_fonction_injectee_renvoie_la_question_originale():
     resultat = reformuler_si_necessaire(
-        "explique", entrees_historique=_historique_factice(), fonction_reformulation=None,
+        "du derniere annee ?", entrees_historique=_historique_factice(), fonction_reformulation=None,
     )
-    assert resultat == "explique"
+    assert resultat == "du derniere annee ?"
 
 
-def test_reformuler_si_necessaire_question_autonome_najamais_appelle_la_fonction():
-    # Coeur de l'Option C : pas d'appel LLM sur une question deja autonome, meme si un
-    # historique existe et qu'une fonction est injectee.
-    def fonction_qui_ne_doit_jamais_etre_appelee(question, historique_texte):
-        raise AssertionError("ne doit pas etre appelee pour une question autonome")
-
-    resultat = reformuler_si_necessaire(
-        "Quel est le taux de chômage actuel ?",
-        entrees_historique=_historique_factice(),
-        fonction_reformulation=fonction_qui_ne_doit_jamais_etre_appelee,
-    )
-    assert resultat == "Quel est le taux de chômage actuel ?"
-
-
-def test_reformuler_si_necessaire_followup_avec_historique_appelle_la_fonction():
+def test_reformuler_si_necessaire_avec_historique_appelle_toujours_la_fonction():
+    # Coeur de la decision retenue (voir docstring de module) : aucune tentative de
+    # deviner si CETTE question precise "ressemble" a un follow-up -- des qu'un
+    # historique existe, la reformulation est systematique, quelle que soit la
+    # formulation de la question (meme une question deja parfaitement autonome).
     appels = []
 
     def fonction_reformulation(question, historique_texte):
         appels.append((question, historique_texte))
-        return "Pourquoi la population projetée du Maroc en 2050 est-elle de 43562 milliers ?"
+        return "Quelle est la population du Maroc pour la derniere annee disponible ?"
 
     resultat = reformuler_si_necessaire(
-        "comment t'as dit 43562, explique",
+        "du derniere annee ?",
         entrees_historique=_historique_factice(),
         fonction_reformulation=fonction_reformulation,
     )
 
-    assert resultat == "Pourquoi la population projetée du Maroc en 2050 est-elle de 43562 milliers ?"
+    assert resultat == "Quelle est la population du Maroc pour la derniere annee disponible ?"
     assert len(appels) == 1
     question_envoyee, historique_envoye = appels[0]
-    assert question_envoyee == "comment t'as dit 43562, explique"
+    assert question_envoyee == "du derniere annee ?"
     assert "population de maroc" in historique_envoye
-    assert "43562" in historique_envoye
+    assert "38050" in historique_envoye
+
+
+def test_reformuler_si_necessaire_appelle_meme_pour_une_question_deja_autonome():
+    # Meme une question parfaitement formee et autonome declenche l'appel des qu'un
+    # historique existe -- c'est le compromis assume de la decision retenue (fiabilite
+    # plutot qu'optimisation des couts, voir docstring de module).
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(question)
+        return question  # deja autonome : le LLM la renvoie quasiment inchangee
+
+    resultat = reformuler_si_necessaire(
+        "Quel est le taux de chômage actuel ?",
+        entrees_historique=_historique_factice(),
+        fonction_reformulation=fonction_reformulation,
+    )
+
+    assert resultat == "Quel est le taux de chômage actuel ?"
+    assert len(appels) == 1
 
 
 def test_reformuler_si_necessaire_exception_retombe_sur_la_question_originale():

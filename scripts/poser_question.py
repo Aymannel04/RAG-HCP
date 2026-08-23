@@ -116,13 +116,15 @@ def poser_question(
     `None` par défaut -- aucune régression si absent, même patron que tous les autres
     paramètres injectables. Une salutation pure est détectée AVANT toute tentative de
     reformulation (elle n'a jamais besoin de contexte pour être comprise). Pour toute
-    autre question, `reformuler_si_necessaire` décide -- via une heuristique gratuite,
-    voir docstring du module -- si un appel LLM de reformulation est justifié ; la
-    classification CHIFFRE/NOTION/MIXTE, la recherche et la génération portent ensuite
-    TOUTES sur la question éventuellement reformulée (`question_effective`), jamais sur
-    l'originale. Seul `historique.ajouter` en bas de fonction garde la question
-    ORIGINALE telle que tapée par l'utilisateur -- l'historique affiché doit rester
-    fidèle à ce qui a été réellement écrit, la reformulation est un détail interne.
+    autre question, `reformuler_si_necessaire` reformule SYSTÉMATIQUEMENT dès qu'un
+    historique existe pour cette session (une tentative d'heuristique par mots-clés a
+    été essayée puis abandonnée le jour même, peu fiable en conditions réelles -- voir
+    docstring de src/reformulateur.py) ; la classification CHIFFRE/NOTION/MIXTE, la
+    recherche et la génération portent ensuite TOUTES sur la question éventuellement
+    reformulée (`question_effective`), jamais sur l'originale. Seul `historique.ajouter`
+    en bas de fonction garde la question ORIGINALE telle que tapée par l'utilisateur --
+    l'historique affiché doit rester fidèle à ce qui a été réellement écrit, la
+    reformulation est un détail interne.
     """
     if routeur.classifier(question) == TypeQuestion.SALUTATION:
         # Court-circuit total (voir docstring de `_reponse_salutation`) : ni lookup, ni

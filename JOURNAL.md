@@ -1075,3 +1075,29 @@ de stage en fin de période, pas besoin d'être exhaustif.
   dans `tests/test_poser_question.py` (dont un qui prouve que la fonction de
   reformulation n'est jamais appelee sur une question deja autonome, coeur de
   l'Option C). Suite complete : 200/200.
+
+## 23 aout 2026 (suite 3) — abandon de l'heuristique de mots-cles pour la reformulation
+
+- Teste en reel : "population actuelle" confirme le fix du 2050 (donne desormais 38050
+  pour 2026, l'annee en cours -- voir suite 1). Mais le follow-up "du derniere annee ?"
+  n'a matche AUCUN mot-cle de `ressemble_a_un_followup` (Option C, ajoutee en suite 2) :
+  la question a ete envoyee telle quelle au Routeur, qui est parti chercher un texte
+  incomprehensible dans les documents et a renvoye un resultat hors-sujet (rapport de
+  2011 sur la politique de population).
+- Objection d'Ayman, fondee : une liste de mots-cles ne peut structurellement pas
+  couvrir toutes les formulations possibles d'une question de suivi en francais -- le
+  meme bug reapparaitrait sous une autre formulation a chaque fois, un jeu du chat et
+  de la souris sans fin plutot qu'une vraie solution.
+- Decision : abandonner toute tentative de deviner si UNE question a besoin de
+  reformulation a partir de son seul texte. `ressemble_a_un_followup` et
+  `MOTS_FOLLOWUP` supprimes de `src/reformulateur.py`. Nouvelle regle, purement
+  structurelle et fiable a 100% : des qu'un historique existe pour la session (ce
+  n'est pas la premiere question), la reformulation est SYSTEMATIQUE, quelle que soit
+  la question. Compromis assume : une question deja autonome au 2e tour ou plus paie
+  quand meme un appel LLM (qui la renvoie quasiment inchangee) -- moins economique
+  qu'un bon filtre, mais ne rate plus jamais un vrai suivi. Cout reel juge negligeable
+  vu le tier gratuit Mistral (~1 milliard de tokens/mois).
+- Tests mis a jour en consequence (suppression des tests d'heuristique, ajout d'un
+  test qui prouve que meme une question deja autonome declenche l'appel des qu'un
+  historique existe, et d'un test qui prouve qu'aucun appel n'est fait sur la toute
+  premiere question d'une session). Suite complete : 187/187.
