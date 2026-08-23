@@ -3,6 +3,8 @@ Tests de LookupStructure avec une vraie base SQLite temporaire (meme esprit que
 tests/test_base_donnees.py), peuplee avec des noms d'indicateurs realistes (memes
 libelles que ceux vraiment renvoyes par l'API BDS, voir data/indicateurs_cures.py).
 """
+import datetime
+
 import pytest
 
 from src.base_donnees import connecter, inserer_document, inserer_indicateur
@@ -65,6 +67,57 @@ def test_rechercher_indicateur_avec_annee_explicite(conn):
     _peupler_indicateurs_realistes(conn)
     resultat = LookupStructure(conn).rechercher_indicateur("Quel était le taux de chômage en 2023 ?")
     assert resultat.periode == "2023T4"
+
+
+# --- Series avec projections futures -- corrige le 23/08 suite a un cas reel (voir
+# JOURNAL.md) : un indicateur comme "Population du Maroc...1960-2050" contient a la
+# fois des donnees observees et des projections dans la meme serie. -------------------
+
+def _peupler_serie_avec_projection(conn):
+    """Reproduit le cas reel I1588 : une serie annuelle qui va au-dela de l'annee en
+    cours (projection), sans distinction dans les donnees renvoyees par l'API BDS."""
+    id_doc = _document_synthetique(conn)
+    annee_courante = datetime.date.today().year
+    annee_projection = annee_courante + 24  # ex. 2050 si on est en 2026, meme ecart que I1588
+    lignes = [
+        (str(annee_courante - 1), 36.5),
+        (str(annee_courante), 37.0),
+        (str(annee_projection), 43.562),
+    ]
+    for periode, valeur in lignes:
+        inserer_indicateur(conn, Indicateur(
+            id_indicateur=None, nom="Population du Maroc par annee civile", valeur=valeur,
+            unite="milliers", periode=periode, region=None, id_document=id_doc, code_bds="I1588",
+        ))
+    return annee_courante, annee_projection
+
+
+def test_rechercher_indicateur_sans_annee_ignore_les_projections_futures(conn):
+    annee_courante, _ = _peupler_serie_avec_projection(conn)
+
+    resultat = LookupStructure(conn).rechercher_indicateur("Quelle est la population du Maroc ?")
+
+    assert resultat is not None
+    # Doit renvoyer la derniere valeur REELLE (annee en cours), jamais la projection
+    # lointaine -- avant le correctif, "ORDER BY periode DESC" sans filtre renvoyait a
+    # tort la ligne de projection (chaine la plus grande, donc "la plus recente" au
+    # sens du tri seul).
+    assert resultat.periode == str(annee_courante)
+    assert resultat.valeur == 37.0
+
+
+def test_rechercher_indicateur_annee_future_explicite_reste_servie(conn):
+    # Une projection reste accessible si explicitement demandee -- seul le comportement
+    # PAR DEFAUT (sans annee) exclut les periodes futures.
+    _, annee_projection = _peupler_serie_avec_projection(conn)
+
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        f"Quelle est la population du Maroc en {annee_projection} ?"
+    )
+
+    assert resultat is not None
+    assert resultat.periode == str(annee_projection)
+    assert resultat.valeur == 43.562
 
 
 def test_rechercher_indicateur_discrimine_activite_vs_emploi(conn):

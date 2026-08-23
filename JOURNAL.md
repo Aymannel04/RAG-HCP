@@ -1018,3 +1018,60 @@ de stage en fin de période, pas besoin d'être exhaustif.
   22 nouveaux tests (`test_routeur.py`, `test_poser_question.py`, dont un qui prouve
   explicitement que le reranker/generateur ne sont jamais appeles). Suite complete :
   172/172, aucune regression.
+
+## 23 aout 2026 (suite) — bug reel : projection future prise pour la valeur actuelle
+
+- Teste en reel via l'interface Streamlit : "population de maroc" renvoyait 43562
+  (en milliers) pour la periode 2050, alors que "population actuelle" (formulee
+  differemment, donc classee NOTION au lieu de CHIFFRE) renvoyait correctement 37,0
+  millions sourcee sur les Cahiers du Plan. Cause : l'indicateur I1588 ("Population du
+  Maroc par annee civile ... 1960-2050") melange donnees observees et projections dans
+  la meme serie API BDS, sans distinction. `LookupStructure.rechercher_indicateur`
+  faisait "ORDER BY periode DESC LIMIT 1" sans filtre quand aucune annee n'est demandee
+  -- "2050" etant la plus grande chaine, elle etait toujours choisie, peu importe
+  qu'elle soit une projection a 24 ans dans le futur.
+- Corrige : quand aucune annee n'est explicitement demandee dans la question, la
+  requete exclut desormais les periodes posterieures a l'annee en cours
+  (`datetime.date.today().year`) avant de prendre la plus recente restante. Une annee
+  future explicitement demandee (ex. "population en 2050") reste servie normalement --
+  seul le comportement PAR DEFAUT change.
+- 2 nouveaux tests dans test_lookup_structure.py (reproduisent le cas reel I1588 avec
+  des periodes relatives a l'annee en cours, donc pas de date codee en dur). Suite
+  complete : 174/174.
+- Egalement observe dans ce meme test : l'assistant ne peut pas "expliquer" un chiffre
+  qu'il a lui-meme donne dans un tour precedent (question de suivi "comment t'as dit
+  43562... explique") -- limite connue et acceptee pour l'instant, l'historique
+  n'alimente que l'affichage, pas le contexte envoye au LLM. A noter pour la section
+  "limites" du rapport de stage, pas un bug a corriger dans le temps restant.
+
+## 23 aout 2026 (suite 2) — memoire conversationnelle (Option C, discutee et choisie avec Ayman)
+
+- Demande explicite d'Ayman apres le test reel precedent : "le chat doit etre un vrai
+  chat pas un q and a" -- l'historique n'etait affiche que pour l'interface, jamais
+  reinjecte dans le pipeline, donc chaque question etait traitee independamment.
+- Discussion de 3 options (A: injecter l'historique brut dans le prompt de generation
+  seulement -- pas d'appel LLM en plus mais ne resout pas la recherche ; B: reformuler
+  systematiquement CHAQUE question via LLM avant routage -- resout tout mais double le
+  cout/latence meme sur les questions deja autonomes ; C: hybride, une heuristique
+  gratuite decide d'abord si la question ressemble a un follow-up ambigu, LLM appele
+  seulement dans ce cas). Ayman a choisi C apres explication detaillee des compromis.
+- Nouveau module `src/reformulateur.py` : `ressemble_a_un_followup` (heuristique pure,
+  meme esprit que Routeur -- mots referentiels explicites comme "ça"/"ce chiffre"/
+  "explique", ou question trop courte une fois les mots-outils retires) et
+  `reformuler_si_necessaire` (orchestration defensive : ne reformule que si un
+  historique existe ET qu'une fonction est injectee ET que l'heuristique se declenche ;
+  toute exception ou reponse vide retombe sur la question originale).
+- `llm_mistral.reformuler_question` : nouvelle fonction, meme patron que `generer`/
+  `classifier_question` (cle API, gestion d'erreur, prompt systeme dedie).
+- `scripts/poser_question.py` : nouveau parametre optionnel `fonction_reformulation`
+  (defaut None, aucune regression). La salutation est detectee AVANT toute tentative de
+  reformulation (elle se comprend toujours seule). Pour toute autre question,
+  `question_effective` (eventuellement reformulee) alimente la classification, le
+  lookup, la recherche, le cache ET la generation -- mais `historique.ajouter` garde
+  toujours la question ORIGINALE telle que tapee, jamais la version reformulee.
+- Cablage dans `main()` et `src/interface.py` : `fonction_reformulation=
+  llm_mistral.reformuler_question`.
+- 20 tests dans `tests/test_reformulateur.py`, 3 dans `tests/test_llm_mistral.py`, 3
+  dans `tests/test_poser_question.py` (dont un qui prouve que la fonction de
+  reformulation n'est jamais appelee sur une question deja autonome, coeur de
+  l'Option C). Suite complete : 200/200.

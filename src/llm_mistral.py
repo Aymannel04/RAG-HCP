@@ -84,6 +84,62 @@ PROMPT_SYSTEME_CLASSIFICATION = (
 )
 
 
+PROMPT_SYSTEME_REFORMULATION = (
+    "Tu recois une question de suivi posee a un systeme de questions-reponses sur les "
+    "statistiques publiques du Maroc (HCP), ainsi que les derniers echanges de la "
+    "conversation. Reecris la question de suivi en une question autonome et complete, "
+    "comprehensible SANS le reste de la conversation -- remplace les mots vagues ('ça', "
+    "'ce chiffre', 'cette periode') et les sujets sous-entendus par ce qu'ils designent "
+    "reellement dans l'historique. Ne reponds PAS a la question, ne rajoute aucune "
+    "information qui ne provient pas de la question ou de l'historique fournis. Reponds "
+    "UNIQUEMENT par la question reformulee, en francais, sans aucun commentaire ni "
+    "guillemets."
+)
+
+
+def reformuler_question(question: str, historique_texte: str) -> str:
+    """Fonction de reformulation compatible avec `src/reformulateur.py`
+    (TypeFonctionReformulation) : (question, historique_texte) -> question autonome.
+
+    Appelee seulement pour les questions qui RESSEMBLENT a un follow-up ambigu (voir
+    `src/reformulateur.py::ressemble_a_un_followup`) -- jamais systematiquement, pour ne
+    pas payer un appel LLM sur des questions deja autonomes (voir discussion avec Ayman,
+    23/08 -- Option C choisie explicitement pour ce compromis).
+
+    À injecter tel quel : `poser_question(..., fonction_reformulation=reformuler_question)`.
+    """
+    cle_api = os.environ.get("MISTRAL_API_KEY")
+    if not cle_api:
+        raise RuntimeError(
+            "MISTRAL_API_KEY manquante. Cree un compte gratuit sur "
+            "https://console.mistral.ai/, genere une cle API (section API Keys), "
+            "et ajoute-la dans un fichier .env a la racine du projet : "
+            "MISTRAL_API_KEY=ta_cle_ici"
+        )
+
+    reponse = requests.post(
+        URL_API,
+        headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
+        json={
+            "model": MODELE,
+            "messages": [
+                {"role": "system", "content": PROMPT_SYSTEME_REFORMULATION},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Historique recent :\n{historique_texte}\n\n"
+                        f"Question de suivi : {question}"
+                    ),
+                },
+            ],
+            "temperature": 0.0,  # reformulation : aucune creativite souhaitee
+        },
+        timeout=15,
+    )
+    reponse.raise_for_status()
+    return reponse.json()["choices"][0]["message"]["content"].strip()
+
+
 def classifier_question(question: str) -> str:
     """Fonction de classification compatible avec Routeur (voir
     src/routeur.py::TypeFonctionClassification) : dernier recours seulement, appelee

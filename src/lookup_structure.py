@@ -80,10 +80,26 @@ espérait un chiffre exact. Seule une inspection des vraies données (re-belance
 `scripts/preremplir_indicateurs_bds.py`) dira, indicateur par indicateur, si ce cas se
 présente.
 
+Periodes projetees vs periodes reelles -- corrige le 23/08 (bug observe en conditions
+reelles, voir JOURNAL.md) :
+
+Certains indicateurs BDS (ex. "Population du Maroc par annee civile ... 1960-2050")
+publient une serie qui melange donnees observees et projections futures dans la meme
+serie, sans distinction explicite dans les donnees renvoyees par l'API. Quand aucune
+annee n'est demandee dans la question, `rechercher_indicateur` prenait jusqu'ici
+`ORDER BY periode DESC LIMIT 1` sans filtre -- ce qui renvoyait la ligne 2050 (la plus
+grande chaine, donc "la plus recente" au sens du tri) pour une question comme
+"population de maroc", presentant une projection a 24 ans comme la valeur actuelle.
+Corrige en excluant les periodes posterieures a l'annee en cours de la comparaison
+DESC quand aucune annee n'est explicitement demandee -- une annee explicitement
+demandee (meme future, ex. "population en 2050") reste servie normalement, seul le
+comportement PAR DEFAUT change.
+
 Statut : implémenté, testé avec une vraie base SQLite temporaire.
 """
 from __future__ import annotations
 
+import datetime
 import re
 import sqlite3
 import unicodedata
@@ -257,6 +273,21 @@ class LookupStructure:
             motif = f"{annee}T{trimestre}" if trimestre else f"{annee}%"
             requete += " AND periode LIKE ?"
             parametres.append(motif)
+        else:
+            # Aucune periode demandee explicitement -- bug reel observe en conditions
+            # reelles le 23/08 (voir JOURNAL.md) : certains indicateurs BDS publient une
+            # serie qui inclut des PROJECTIONS futures (ex. "Population du Maroc par
+            # annee civile ... 1960-2050"). Sans ce filtre, "ORDER BY periode DESC" pour
+            # une question sans annee (ex. "population de maroc") renvoyait
+            # systematiquement la ligne 2050 -- la plus grande chaine, donc "la plus
+            # recente" au sens du tri, mais une projection a 24 ans dans le futur
+            # presentee a tort comme "la" valeur actuelle. On exclut donc les periodes
+            # posterieures a l'annee en cours avant de prendre la plus recente restante
+            # -- une question sans annee explicite demande la derniere valeur REELLE
+            # connue, jamais une projection.
+            annee_courante = datetime.date.today().year
+            requete += " AND CAST(SUBSTR(periode, 1, 4) AS INTEGER) <= ?"
+            parametres.append(annee_courante)
 
         requete += " ORDER BY periode DESC LIMIT 1"
 

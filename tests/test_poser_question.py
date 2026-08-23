@@ -369,3 +369,81 @@ def test_question_salutation_court_circuite_reranker_et_generateur(conn, routeur
 def test_question_cloture_renvoie_message_de_cloture(conn, routeur, question):
     reponse = poser_question(conn, _RerankerInterdit(), routeur, _GenerateurInterdit(), question)
     assert reponse.texte == MESSAGE_CLOTURE
+
+
+# --- Reformulation des follow-ups (ajoutee le 23/08, voir src/reformulateur.py) -------
+
+def test_question_followup_avec_historique_est_reformulee_avant_la_recherche(conn, indexeur, reranker, routeur, historique):
+    # Historique existant : une premiere question deja repondue dans cette session.
+    id_document = inserer_document(conn, Document(
+        id_document=None, url="https://www.hcp.ma/rgph.html", titre="Le RGPH expliqué",
+        date_publication="2026-06-01", langue="fr", categorie="Population et demographie", type="pdf",
+    ))
+    indexeur.indexer(
+        Document(id_document=id_document, url="x", titre="x", date_publication=None,
+                 langue="fr", categorie="", type="pdf"),
+        "Le RGPH est le recensement general de la population et de l'habitat, mene tous les 10 ans.",
+    )
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+    historique.ajouter("session-test", "C'est quoi le RGPH ?", Reponse(
+        texte="Le RGPH est un recensement.", source_url="https://www.hcp.ma/rgph.html",
+        source_titre="Le RGPH expliqué", source_date="2026-06-01",
+    ))
+
+    appels_reformulation = []
+
+    def fausse_reformulation(question, historique_texte):
+        appels_reformulation.append((question, historique_texte))
+        return "C'est quoi le RGPH exactement ?"  # question reformulee, autonome
+
+    poser_question(
+        conn, reranker, routeur, generateur, "explique",
+        historique=historique, id_session="session-test",
+        fonction_reformulation=fausse_reformulation,
+    )
+
+    # La fonction de reformulation a bien ete appelee (question courte = follow-up).
+    assert len(appels_reformulation) == 1
+    assert appels_reformulation[0][0] == "explique"
+    assert "RGPH" in appels_reformulation[0][1]
+
+    # L'historique garde la question ORIGINALE, pas la reformulee.
+    entrees = historique.recuperer("session-test")
+    assert entrees[-1]["question"] == "explique"
+
+
+def test_question_autonome_avec_historique_najamais_appelle_la_reformulation(conn, indexeur, reranker, routeur, historique):
+    id_document = inserer_document(conn, Document(
+        id_document=None, url="https://www.hcp.ma/rgph.html", titre="Le RGPH expliqué",
+        date_publication="2026-06-01", langue="fr", categorie="Population et demographie", type="pdf",
+    ))
+    indexeur.indexer(
+        Document(id_document=id_document, url="x", titre="x", date_publication=None,
+                 langue="fr", categorie="", type="pdf"),
+        "Le RGPH est le recensement general de la population et de l'habitat, mene tous les 10 ans.",
+    )
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+    historique.ajouter("session-test", "C'est quoi le RGPH ?", Reponse(
+        texte="Le RGPH est un recensement.", source_url="https://www.hcp.ma/rgph.html",
+        source_titre="Le RGPH expliqué", source_date="2026-06-01",
+    ))
+
+    def fonction_qui_ne_doit_jamais_etre_appelee(question, historique_texte):
+        raise AssertionError("ne doit pas etre appelee pour une question deja autonome")
+
+    reponse = poser_question(
+        conn, reranker, routeur, generateur, "C'est quoi le RGPH ?",
+        historique=historique, id_session="session-test",
+        fonction_reformulation=fonction_qui_ne_doit_jamais_etre_appelee,
+    )
+
+    assert "reponse generee" in reponse.texte
+
+
+def test_question_followup_sans_fonction_reformulation_comportement_inchange(conn, reranker, routeur):
+    # Regression : parametre optionnel, defaut None -- une question courte sans
+    # fonction de reformulation injectee ni historique se comporte comme avant
+    # (repli sur la question originale, aucun changement de comportement).
+    generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
+    reponse = poser_question(conn, reranker, routeur, generateur, "explique")
+    assert "n'ai pas trouvé" in reponse.texte

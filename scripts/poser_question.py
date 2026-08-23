@@ -51,6 +51,7 @@ from src.cache_redis import CacheReponses, HistoriqueConversation
 from src.generateur import ContexteMixte, Generateur, Reponse
 from src.indexeur_texte import IndexeurTexte
 from src.lookup_structure import LookupStructure
+from src.reformulateur import TypeFonctionReformulation, reformuler_si_necessaire
 from src.retrieval_reranker import RetrievalReranker
 from src.routeur import Routeur, TypeQuestion
 
@@ -94,6 +95,7 @@ def poser_question(
     cache: Optional[CacheReponses] = None,
     historique: Optional[HistoriqueConversation] = None,
     id_session: Optional[str] = None,
+    fonction_reformulation: Optional[TypeFonctionReformulation] = None,
 ) -> Reponse:
     """Implémente les figures 5 et 6, plus le scénario mixte (voir docstring de
     module) : classifie la question, suit le(s) chemin(s) correspondant(s), avec repli
@@ -109,47 +111,69 @@ def poser_question(
     `historique` est `None` (rien à indexer sans backend), et inversement aucun
     historique n'est enregistré si `id_session` est `None` (pas de clé sous laquelle
     ranger l'entrée) -- les deux sont nécessaires ensemble, jamais l'un sans l'autre.
-    """
-    type_question = routeur.classifier(question)
 
-    if type_question == TypeQuestion.SALUTATION:
+    `fonction_reformulation` (ajouté le 23/08, voir src/reformulateur.py) : optionnel,
+    `None` par défaut -- aucune régression si absent, même patron que tous les autres
+    paramètres injectables. Une salutation pure est détectée AVANT toute tentative de
+    reformulation (elle n'a jamais besoin de contexte pour être comprise). Pour toute
+    autre question, `reformuler_si_necessaire` décide -- via une heuristique gratuite,
+    voir docstring du module -- si un appel LLM de reformulation est justifié ; la
+    classification CHIFFRE/NOTION/MIXTE, la recherche et la génération portent ensuite
+    TOUTES sur la question éventuellement reformulée (`question_effective`), jamais sur
+    l'originale. Seul `historique.ajouter` en bas de fonction garde la question
+    ORIGINALE telle que tapée par l'utilisateur -- l'historique affiché doit rester
+    fidèle à ce qui a été réellement écrit, la reformulation est un détail interne.
+    """
+    if routeur.classifier(question) == TypeQuestion.SALUTATION:
         # Court-circuit total (voir docstring de `_reponse_salutation`) : ni lookup, ni
-        # reranker, ni cache (le cache NOTION n'a aucun sens ici, la reponse est deja
-        # instantanee), seulement l'historique en bas de fonction comme pour tout type.
+        # reranker, ni cache, ni reformulation (une salutation se comprend toujours
+        # seule) -- seulement l'historique en bas de fonction comme pour tout type.
         reponse = _reponse_salutation(question)
 
-    elif type_question == TypeQuestion.CHIFFRE:
-        indicateur = LookupStructure(conn).rechercher_indicateur(question)
-        if indicateur is not None:
-            reponse = generateur.generer_reponse(question, indicateur)
-        else:
-            # Repli documenté (voir docstring de module) : pas d'indicateur exact
-            # trouve, on retente via la recherche textuelle plutot que d'abandonner.
-            chunks = reranker.rechercher_et_trier(question)
-            reponse = generateur.generer_reponse(question, chunks)
-
-    elif type_question == TypeQuestion.MIXTE:
-        # Dispatch parallele : les deux chemins sont interroges, quoi qu'il arrive.
-        indicateur = LookupStructure(conn).rechercher_indicateur(question)
-        chunks = reranker.rechercher_et_trier(question)
-        if indicateur is not None:
-            # Generateur degrade proprement tout seul si `chunks` est vide (voir
-            # ContexteMixte / _generer_reponse_mixte) -- pas besoin de le refaire ici.
-            reponse = generateur.generer_reponse(question, ContexteMixte(indicateur=indicateur, chunks=chunks))
-        else:
-            # Aucun indicateur trouve du tout : repli sur le chemin notion seul.
-            reponse = generateur.generer_reponse(question, chunks)
-
     else:
-        # TypeQuestion.NOTION -- seul chemin mis en cache (voir docstring de module).
-        reponse_en_cache = cache.obtenir(question) if cache is not None else None
-        if reponse_en_cache is not None:
-            reponse = reponse_en_cache
+        entrees_recentes = (
+            historique.recuperer(id_session)
+            if historique is not None and id_session is not None
+            else []
+        )
+        question_effective = reformuler_si_necessaire(question, entrees_recentes, fonction_reformulation)
+        type_question = routeur.classifier(question_effective)
+
+        if type_question == TypeQuestion.CHIFFRE:
+            indicateur = LookupStructure(conn).rechercher_indicateur(question_effective)
+            if indicateur is not None:
+                reponse = generateur.generer_reponse(question_effective, indicateur)
+            else:
+                # Repli documenté (voir docstring de module) : pas d'indicateur exact
+                # trouve, on retente via la recherche textuelle plutot que d'abandonner.
+                chunks = reranker.rechercher_et_trier(question_effective)
+                reponse = generateur.generer_reponse(question_effective, chunks)
+
+        elif type_question == TypeQuestion.MIXTE:
+            # Dispatch parallele : les deux chemins sont interroges, quoi qu'il arrive.
+            indicateur = LookupStructure(conn).rechercher_indicateur(question_effective)
+            chunks = reranker.rechercher_et_trier(question_effective)
+            if indicateur is not None:
+                # Generateur degrade proprement tout seul si `chunks` est vide (voir
+                # ContexteMixte / _generer_reponse_mixte) -- pas besoin de le refaire ici.
+                reponse = generateur.generer_reponse(question_effective, ContexteMixte(indicateur=indicateur, chunks=chunks))
+            else:
+                # Aucun indicateur trouve du tout : repli sur le chemin notion seul.
+                reponse = generateur.generer_reponse(question_effective, chunks)
+
         else:
-            chunks = reranker.rechercher_et_trier(question)
-            reponse = generateur.generer_reponse(question, chunks)
-            if cache is not None:
-                cache.enregistrer(question, reponse)
+            # TypeQuestion.NOTION -- seul chemin mis en cache (voir docstring de
+            # module). Cle de cache = question_effective : deux formulations
+            # differentes qui se reformulent vers la meme question autonome partagent
+            # alors le meme cache, ce qui est le comportement souhaite.
+            reponse_en_cache = cache.obtenir(question_effective) if cache is not None else None
+            if reponse_en_cache is not None:
+                reponse = reponse_en_cache
+            else:
+                chunks = reranker.rechercher_et_trier(question_effective)
+                reponse = generateur.generer_reponse(question_effective, chunks)
+                if cache is not None:
+                    cache.enregistrer(question_effective, reponse)
 
     if historique is not None and id_session is not None:
         historique.ajouter(id_session, question, reponse)
@@ -198,6 +222,7 @@ def main(question: str, chemin_db: Optional[Path] = None, id_session: Optional[s
         reponse = poser_question(
             conn, reranker, routeur, generateur, question,
             cache=cache, historique=historique, id_session=id_session,
+            fonction_reformulation=llm_mistral.reformuler_question,
         )
 
         print(f"Question : {question}")

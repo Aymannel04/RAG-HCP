@@ -98,6 +98,7 @@ def main() -> None:
             reponse = poser_question(
                 conn, reranker, routeur, generateur, question,
                 cache=cache, historique=historique, id_session=st.session_state.id_session,
+                fonction_reformulation=llm_mistral.reformuler_question,
             )
         with st.chat_message("assistant"):
             _afficher_reponse(reponse)
