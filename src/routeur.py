@@ -62,6 +62,7 @@ class TypeQuestion(Enum):
     CHIFFRE = "chiffre"
     NOTION = "notion"
     MIXTE = "mixte"
+    SALUTATION = "salutation"
 
 
 # Signal narratif : présence d'une intention explicative (voir
@@ -114,6 +115,22 @@ MOTS_CHIFFRE = [
 # renfort si aucun des deux dictionnaires ci-dessus n'a tranché.
 PATTERN_PERIODE = re.compile(r"\b(19|20)\d{2}\b|\bT[1-4]\b")
 
+# Salutation / small talk -- ajoute le 23/08, suite a un cas observe en conditions
+# reelles (voir TODO.md) : une question comme "hello" ou "salut" ne matche aucun des
+# deux dictionnaires ci-dessus, tombe par defaut sur NOTION, et part dans une vraie
+# recherche semantique (RetrievalReranker + LLM) pour finir par un refus grounding
+# correct mais peu naturel ("je ne trouve pas d'information pertinente"). Verifie en
+# dernier (voir ordre dans `classifier`) : ne se declenche QUE si aucun signal
+# notionnel/chiffre n'a deja tranche, donc "Bonjour, quel est le taux de chomage ?"
+# continue de repondre a la vraie question (CHIFFRE l'emporte). Regex avec \b plutot
+# qu'un simple `in` : "hi" ou "bye" en substring nu matcherait a tort des mots comme
+# "chiffre" (qui contient "hi") -- \b force une frontiere de mot des deux cotes.
+PATTERN_SALUTATION = re.compile(
+    r"\b(bonjour|bonsoir|salut|salam|slm|hello|hi|hey|coucou|merci|au revoir|"
+    r"a bientot|à bientôt|bye|ça va|ca va)\b",
+    re.IGNORECASE,
+)
+
 # (question) -> "CHIFFRE", "NOTION" ou "MIXTE" (toute autre valeur est traitee comme "ne
 # sait pas"). Voir docstring de module, section "V2 ajoutee le 28/07".
 TypeFonctionClassification = Callable[[str], str]
@@ -139,12 +156,15 @@ class Routeur:
 
         Ordre de décision : signal mixte d'abord (le plus spécifique -- narratif
         combinable ET chiffré tous les deux présents), puis narratif pur, puis chiffré
-        pur, puis repli sur la présence d'une période (signal faible), puis appel LLM en
-        dernier recours si injecté (voir `_fonction_classification_llm`), puis NOTION
-        par défaut -- un faux négatif sur NOTION bascule vers RetrievalReranker qui
-        reste capable de faire remonter un chiffre s'il apparaît dans le texte d'un
-        rapport, alors qu'un faux négatif sur CHIFFRE renverrait "indicateur non trouvé"
-        sans aucune tentative de réponse.
+        pur, puis salutation/small talk (voir docstring de `PATTERN_SALUTATION`) --
+        vérifiée seulement ici, APRES notion/chiffré, pour qu'une question comme
+        "Bonjour, quel est le taux de chômage ?" reste bien classée CHIFFRE et ne soit
+        jamais avalée par la politesse d'ouverture -- puis repli sur la présence d'une
+        période (signal faible), puis appel LLM en dernier recours si injecté (voir
+        `_fonction_classification_llm`), puis NOTION par défaut -- un faux négatif sur
+        NOTION bascule vers RetrievalReranker qui reste capable de faire remonter un
+        chiffre s'il apparaît dans le texte d'un rapport, alors qu'un faux négatif sur
+        CHIFFRE renverrait "indicateur non trouvé" sans aucune tentative de réponse.
         """
         signal = question.lower().strip()
 
@@ -160,6 +180,9 @@ class Routeur:
 
         if a_signal_chiffre:
             return TypeQuestion.CHIFFRE
+
+        if PATTERN_SALUTATION.search(signal):
+            return TypeQuestion.SALUTATION
 
         if self._fonction_classification_llm is not None:
             resultat = self._classifier_via_llm(question)

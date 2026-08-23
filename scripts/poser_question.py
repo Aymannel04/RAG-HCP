@@ -55,6 +55,36 @@ from src.retrieval_reranker import RetrievalReranker
 from src.routeur import Routeur, TypeQuestion
 
 
+MOTS_CLOTURE = ("merci", "au revoir", "a bientot", "à bientôt", "bye")
+
+MESSAGE_ACCUEIL = (
+    "Bonjour ! Je suis l'assistant du HCP. Posez-moi une question sur les "
+    "statistiques et publications du Haut-Commissariat au Plan (ex. taux de "
+    "chômage, population, indice des prix...)."
+)
+MESSAGE_CLOTURE = "Avec plaisir ! N'hésitez pas si vous avez d'autres questions."
+
+
+def _reponse_salutation(question: str) -> Reponse:
+    """Réponse canned pour `TypeQuestion.SALUTATION` (voir src/routeur.py) -- ajoutée
+    le 23/08 suite a un cas observe en conditions reelles : une salutation pure
+    ("hello", "salam"...) partait par defaut dans RetrievalReranker + LLM, sollicitant
+    inutilement les modeles lourds (embedding + cross-encoder + generation) pour finir
+    sur un refus grounding correct mais peu naturel. Court-circuit total ici : pas de
+    lookup, pas de reranker, pas d'appel LLM -- reponse instantanee et gratuite.
+
+    Deux gabarits selon que la question ressemble a une ouverture ("bonjour") ou a une
+    cloture/remerciement ("merci", "au revoir") -- distinction faite ici plutot que
+    dans Routeur (qui ne fait que classifier, pas de texte metier) ou dans Generateur
+    (qui dispatche sur le TYPE du contexte, pas sur le TypeQuestion d'origine).
+    `source_url`/`source_titre` vides, meme convention que
+    Generateur.MESSAGE_SANS_INFORMATION -- aucune source a citer pour une politesse.
+    """
+    signal = question.lower().strip()
+    texte = MESSAGE_CLOTURE if any(mot in signal for mot in MOTS_CLOTURE) else MESSAGE_ACCUEIL
+    return Reponse(texte=texte, source_url="", source_titre="", source_date=None)
+
+
 def poser_question(
     conn,
     reranker: RetrievalReranker,
@@ -82,7 +112,13 @@ def poser_question(
     """
     type_question = routeur.classifier(question)
 
-    if type_question == TypeQuestion.CHIFFRE:
+    if type_question == TypeQuestion.SALUTATION:
+        # Court-circuit total (voir docstring de `_reponse_salutation`) : ni lookup, ni
+        # reranker, ni cache (le cache NOTION n'a aucun sens ici, la reponse est deja
+        # instantanee), seulement l'historique en bas de fonction comme pour tout type.
+        reponse = _reponse_salutation(question)
+
+    elif type_question == TypeQuestion.CHIFFRE:
         indicateur = LookupStructure(conn).rechercher_indicateur(question)
         if indicateur is not None:
             reponse = generateur.generer_reponse(question, indicateur)

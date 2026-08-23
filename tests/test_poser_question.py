@@ -10,7 +10,7 @@ import re
 import fakeredis
 import pytest
 
-from scripts.poser_question import poser_question
+from scripts.poser_question import MESSAGE_ACCUEIL, MESSAGE_CLOTURE, poser_question
 from src.base_donnees import connecter, inserer_document, inserer_indicateur
 from src.cache_redis import CacheReponses, HistoriqueConversation
 from src.generateur import Generateur, Reponse
@@ -335,3 +335,37 @@ def test_sans_cache_ni_historique_le_comportement_est_inchange(conn, reranker, r
     generateur = Generateur(conn, fonction_generation=_fausse_fonction_generation)
     reponse = poser_question(conn, reranker, routeur, generateur, "C'est quoi le RGPH ?")
     assert "n'ai pas trouvé" in reponse.texte
+
+
+# --- Salutation / small talk (ajoute le 23/08, voir src/routeur.py et
+# scripts/poser_question.py::_reponse_salutation) : court-circuit total du pipeline. ---
+
+class _GenerateurInterdit:
+    """Duck-type qui echoue si on l'appelle -- prouve qu'une salutation ne declenche
+    aucune generation LLM (meme raisonnement que _RerankerInterdit ci-dessus)."""
+
+    def generer_reponse(self, question, contexte):
+        raise AssertionError("le generateur ne doit pas etre appele pour une salutation")
+
+
+def test_question_salutation_court_circuite_reranker_et_generateur(conn, routeur, cache, historique):
+    reponse = poser_question(
+        conn, _RerankerInterdit(), routeur, _GenerateurInterdit(), "Bonjour",
+        cache=cache, historique=historique, id_session="session-test",
+    )
+
+    assert reponse.texte == MESSAGE_ACCUEIL
+    assert reponse.source_url == ""
+    # Ni mise en cache (n'a aucun sens pour une reponse deja instantanee)...
+    assert cache.obtenir("Bonjour") is None
+    # ...mais bien journalisee dans l'historique, comme toute question (voir docstring
+    # de module poser_question.py : "TOUTES les questions quel que soit leur type").
+    entrees = historique.recuperer("session-test")
+    assert len(entrees) == 1
+    assert entrees[0]["reponse"]["texte"] == MESSAGE_ACCUEIL
+
+
+@pytest.mark.parametrize("question", ["Merci", "Merci beaucoup !", "Au revoir"])
+def test_question_cloture_renvoie_message_de_cloture(conn, routeur, question):
+    reponse = poser_question(conn, _RerankerInterdit(), routeur, _GenerateurInterdit(), question)
+    assert reponse.texte == MESSAGE_CLOTURE

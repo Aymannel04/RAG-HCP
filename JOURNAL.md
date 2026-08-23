@@ -986,3 +986,35 @@ de stage en fin de période, pas besoin d'être exhaustif.
   -> deuxieme reponse identique mot pour mot a la premiere, confirmant que le cache
   sert bien la reponse en cache sans rappeler Mistral. Cache Redis + historique
   entierement valides, code et conditions reelles.
+
+## 23 aout 2026 — interface Streamlit + salutation ignoree par le Routeur
+
+- `src/interface.py` implemente (Sprint 4) : chat Streamlit au-dessus du pipeline
+  existant, sans logique metier propre. Modeles lourds (BGE-M3 + cross-encoder) charges
+  via `st.cache_resource` (persistant entre reruns/sessions) ; connexion SQLite
+  volontairement NON mise en cache (thread-safety : `st.cache_resource` est un cache
+  global partage entre toutes les sessions, `sqlite3.Connection` n'est pas partageable
+  entre threads) ; `id_session` genere une fois par session via `st.session_state` ;
+  historique affiche relit `HistoriqueConversation.recuperer()` a chaque rerun (persiste
+  au F5, contrairement a une simple liste Python locale).
+- Premier test reel : le process a plante en pleine reponse ("Connection error" cote
+  navigateur), sans trace Python dans le terminal -- diagnostique via le Gestionnaire des
+  taches Windows : memoire a 96%, la cause est l'OS qui tue le process (BGE-M3 +
+  cross-encoder + tout le reste ouvert sur la machine d'Ayman, dont `VmmemWSL` a lui
+  seul 1.6 Go pour Docker/Redis). Pas un bug de code.
+- En testant une deuxieme fois, une vraie limite fonctionnelle est apparue : poser
+  "hello"/"salut" comme question fait partir le Routeur par defaut sur NOTION (aucun mot-
+  cle de `MOTS_NOTION`/`MOTS_CHIFFRE` ne matche une salutation), donc une vraie recherche
+  semantique + appel LLM pour une politesse -- gaspillage de ressources (aggrave le
+  probleme memoire ci-dessus) et reponse de refus techniquement correcte mais peu
+  naturelle pour l'utilisateur.
+- Corrige par un troisieme type de routage, `TypeQuestion.SALUTATION` (`src/routeur.py`) :
+  detecte par regex avec frontieres de mot (`\b...\b`, pour eviter qu'un mot comme "hi"
+  matche a tort a l'interieur de "chiffre"), verifie seulement APRES notion/chiffre pour
+  qu'une question du type "Bonjour, quel est le taux de chomage ?" continue de repondre a
+  la vraie question. `scripts/poser_question.py::_reponse_salutation` court-circuite
+  entierement le pipeline pour ce type (pas de lookup, pas de reranker, pas de LLM,
+  reponse canned instantanee), avec deux gabarits (accueil vs cloture/remerciement).
+  22 nouveaux tests (`test_routeur.py`, `test_poser_question.py`, dont un qui prouve
+  explicitement que le reranker/generateur ne sont jamais appeles). Suite complete :
+  172/172, aucune regression.

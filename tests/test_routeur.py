@@ -83,6 +83,46 @@ def test_classifier_question_ambigue_sans_mot_cle_retombe_sur_notion(routeur):
     assert routeur.classifier("Le Maroc") == TypeQuestion.NOTION
 
 
+# --- Salutation / small talk -- ajoute le 23/08, voir docstring de PATTERN_SALUTATION.
+
+@pytest.mark.parametrize("question", [
+    "Bonjour",
+    "bonjour !",
+    "Salut",
+    "Salam",
+    "slm",
+    "Hello",
+    "hi",
+    "Hey !",
+    "Coucou",
+    "Bonsoir",
+    "Merci",
+    "Merci beaucoup",
+    "Au revoir",
+    "à bientôt",
+    "ça va ?",
+])
+def test_classifier_salutations(routeur, question):
+    assert routeur.classifier(question) == TypeQuestion.SALUTATION
+
+
+@pytest.mark.parametrize("question, type_attendu", [
+    # Une salutation combinee a une vraie question ne doit JAMAIS etre avalee par la
+    # politesse d'ouverture -- la vraie question l'emporte (voir docstring de
+    # `classifier`, ordre de decision : notion/chiffre verifies avant salutation).
+    ("Bonjour, quel est le taux de chômage ?", TypeQuestion.CHIFFRE),
+    ("Salut, c'est quoi le RGPH ?", TypeQuestion.NOTION),
+])
+def test_classifier_salutation_combinee_a_une_vraie_question_ignore_la_politesse(routeur, question, type_attendu):
+    assert routeur.classifier(question) == type_attendu
+
+
+def test_classifier_ne_declenche_pas_salutation_sur_un_mot_qui_contient_hi_en_substring(routeur):
+    # Piege evite (voir docstring de PATTERN_SALUTATION) : "chiffre" contient "hi" en
+    # substring nu -- \b dans le regex doit empecher tout faux positif ici.
+    assert routeur.classifier("chiffre") != TypeQuestion.SALUTATION
+
+
 # --- Fallback LLM (dernier recours) -- ajoute le 28/07, voir docstring de module. ---
 
 QUESTION_SANS_MOT_CLE = "Le Maroc"  # ne matche ni MOTS_NOTION, ni MOTS_CHIFFRE, ni une periode
