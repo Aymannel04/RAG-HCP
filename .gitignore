@@ -29,6 +29,9 @@ data/bds_catalogue.json
 .DS_Store
 Thumbs.db
 
+# Logs de la tache planifiee nocturne (scripts/rafraichir_corpus.ps1)
+logs/
+
 # Extraits generes localement par les scripts de test (contenu volumineux, regenerable)
 scripts/extraits/
 
@@ -55,3 +58,5 @@ docs/fiche_ventilation_routage_28_juillet.tex
 docs/fiche_ventilation_routage_28_juillet.pdf
 docs/rapport_stage.tex
 docs/rapport_stage.pdf
+docs/fiche_sprint4_interface_memoire.tex
+docs/fiche_sprint4_interface_memoire.pdf
