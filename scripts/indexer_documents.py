@@ -20,6 +20,12 @@ Usage prévu (à exécuter sur le PC, ce sandbox n'a pas d'accès réseau vers h
 Collecte via `data/listing_urls.py` (ADR 0006, `Scraper.collecter_depuis_listing`,
 `max_pages=1` — portée "fraîcheur" par défaut ; passer `max_pages=None` dans le code
 pour une collecte historique complète) puis indexe chaque `Document` brut retourné.
+
+Depuis le 30/08, une 2e source est aussi couverte : `URL_DERNIERES_PARUTIONS` (flux
+transversal hcp.ma/downloads/?tag=Dernières+parutions, `Scraper.collecter_depuis_
+telechargements`) — capture les publications qui ne sont rattachées à aucun sous-thème
+des 3 catégories ci-dessus (ex. "Chiffres clés"), voir commentaire dans
+`data/listing_urls.py`.
 """
 from __future__ import annotations
 
@@ -43,6 +49,21 @@ def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, docu
         # contenu, on l'écarte ici avant tout traitement inutile.
         return {"statut": "ignore_html", "chunks": 0, "tableaux": 0, "id_document": None}
 
+    # Rafraichissement incremental (bug trouve le 27/08 -- voir JOURNAL.md) :
+    # `main()` reinterroge systematiquement la page 1 de chaque listing a chaque
+    # execution (portee "fraicheur", voir docstring de module), donc la plupart des
+    # documents rencontres sont deja connus, pas de vraies nouveautes. Avant ce
+    # correctif, on refaisait quand meme extraction + chunking + embeddings pour
+    # CHAQUE document deja indexe, et on reinserait des chunks en double (seul
+    # `document.url` a une contrainte UNIQUE, pas `chunk`) -- couteux et ca polluait
+    # l'index avec des doublons a chaque relance. On verifie ici, AVANT tout travail
+    # couteux, si l'URL est deja en base ; si oui on s'arrete net.
+    deja_connu = conn.execute(
+        "SELECT id_document FROM document WHERE url = ?", (document.url,)
+    ).fetchone()
+    if deja_connu is not None:
+        return {"statut": "deja_indexe", "chunks": 0, "tableaux": 0, "id_document": deja_connu[0]}
+
     texte, tableaux = extracteur.extraire(document)
 
     id_document = inserer_document(conn, document)
@@ -63,10 +84,15 @@ def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, docu
     }
 
 
-def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> None:
+def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
+    """Renvoie le nombre de VRAIES nouveautes indexees ce run (statut "ok", voir
+    `indexer_document`) -- distinct de `total_documents` ci-dessous, qui compte
+    aussi les documents deja connus rencontres au passage. Utilise par
+    `scripts/rafraichir_corpus.py` pour decider si le cache NOTION doit etre vide
+    (voir docstring de ce module -- inutile de le vider une nuit sans nouveaute)."""
     # Imports locaux : evite de charger Scraper/requests pour les tests qui n'utilisent
     # que `indexer_document` (celui-ci n'a besoin d'aucun acces reseau).
-    from data.listing_urls import URLS_LISTING_PAR_CATEGORIE
+    from data.listing_urls import URL_DERNIERES_PARUTIONS, URLS_LISTING_PAR_CATEGORIE
     from src.scraper import Scraper
 
     conn = connecter(chemin_db)
@@ -76,6 +102,7 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> None
 
     total_documents = 0
     total_chunks = 0
+    nouveaux_documents = 0
 
     try:
         for categorie, listings in URLS_LISTING_PAR_CATEGORIE.items():
@@ -91,15 +118,41 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> None
                     resume = indexer_document(conn, extracteur, indexeur, document)
                     total_documents += 1
                     total_chunks += resume["chunks"]
+                    if resume["statut"] == "ok":
+                        nouveaux_documents += 1
                     print(
                         f"{document.type:5} | {resume['statut']:12} | "
                         f"{resume['chunks']:3} chunks | {document.titre[:60]}"
                     )
+
+        # Flux transversal (voir data/listing_urls.py, URL_DERNIERES_PARUTIONS) : capture
+        # les nouveautes hors des 3 categories ci-dessus (ex. "Chiffres cles", brochures
+        # generales, non rattachees a un seul sous-theme). Methode de collecte differente
+        # (Scraper.collecter_depuis_telechargements) : chaque entree pointe deja vers le
+        # fichier telechargeable, pas de page article HTML intermediaire.
+        if limite is None or total_documents < limite:
+            documents = scraper.collecter_depuis_telechargements(
+                URL_DERNIERES_PARUTIONS, categorie="Publications generales", max_pages=1
+            )
+            for document in documents:
+                if limite is not None and total_documents >= limite:
+                    break
+                resume = indexer_document(conn, extracteur, indexeur, document)
+                total_documents += 1
+                total_chunks += resume["chunks"]
+                if resume["statut"] == "ok":
+                    nouveaux_documents += 1
+                print(
+                    f"{document.type:5} | {resume['statut']:12} | "
+                    f"{resume['chunks']:3} chunks | {document.titre[:60]}"
+                )
     finally:
         conn.close()
 
     print()
-    print(f"Total : {total_documents} document(s) traite(s), {total_chunks} chunk(s) indexe(s).")
+    print(f"Total : {total_documents} document(s) traite(s), {total_chunks} chunk(s) indexe(s), "
+          f"{nouveaux_documents} nouveaute(s).")
+    return nouveaux_documents
 
 
 if __name__ == "__main__":

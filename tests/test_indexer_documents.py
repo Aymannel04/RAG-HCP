@@ -130,3 +130,26 @@ def test_indexer_document_meme_url_deux_fois_ne_duplique_pas_le_document(tmp_pat
 
     total_documents = conn.execute("SELECT COUNT(*) FROM document").fetchone()[0]
     assert total_documents == 1
+
+
+def test_indexer_document_meme_url_deux_fois_ne_duplique_pas_les_chunks(tmp_path, conn, extracteur, indexeur):
+    """Regression du bug trouve le 27/08 (voir JOURNAL.md) : `document.url` est
+    UNIQUE et empechait deja le doublon COTE DOCUMENT (voir test precedent), mais
+    rien n'empechait de refaire extraction/chunking/embeddings et de reinserer des
+    chunks en double a chaque relance de scripts/indexer_documents.py -- ce test
+    couvrait deja l'URL, mais jamais le nombre de chunks, jusqu'a ce que ce bug soit
+    trouve en conditions reelles (corpus jamais rafraichi car relancer le script
+    l'aurait pollue)."""
+    document1 = _document_docx(tmp_path, url="https://www.hcp.ma/meme-url_a3333.html")
+    document2 = _document_docx(tmp_path, url="https://www.hcp.ma/meme-url_a3333.html")
+
+    resume1 = indexer_document(conn, extracteur, indexeur, document1)
+    resume2 = indexer_document(conn, extracteur, indexeur, document2)
+
+    assert resume1["statut"] == "ok"
+    assert resume2["statut"] == "deja_indexe"
+    assert resume2["chunks"] == 0
+    assert resume2["id_document"] == resume1["id_document"]
+
+    total_chunks = conn.execute("SELECT COUNT(*) FROM chunk").fetchone()[0]
+    assert total_chunks == resume1["chunks"]
