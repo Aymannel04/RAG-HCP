@@ -56,6 +56,16 @@ PATTERN_URL_ARTICLE = re.compile(r"_a\d+\.html$")
 # hcp.ma change ce nombre.
 PATTERN_PARAM_START = re.compile(r"[?&]start=(\d+)")
 
+# Parametre de pagination observe sur les pages hcp.ma/downloads/?tag=... (ex.
+# "...&p=20") -- different de ?start= ci-dessus, propre a ce systeme de telechargements
+# (voir Scraper.collecter_depuis_telechargements). Trouve le 30/08 en diagnostiquant un
+# document ("Chiffres cles 2026") absent du corpus : aucune des 3 categories couvertes
+# par data/listing_urls.py ne le referencait, car "Chiffres cles" est une publication
+# transversale (tag "Publications generales"), pas rattachee a un sous-theme -- d'ou ce
+# flux distinct base sur le tag "Dernieres parutions", qui liste toutes les nouveautes
+# tous themes confondus.
+PATTERN_PARAM_P = re.compile(r"[?&]p=(\d+)")
+
 
 class Scraper:
     """Collecte les pages et pieces jointes (PDF/XLSX/DOCX) des categories ciblees de hcp.ma."""
@@ -220,6 +230,131 @@ class Scraper:
         paliers = set()
         for a in soup.find_all("a", href=True):
             m = PATTERN_PARAM_START.search(a["href"])
+            if m:
+                paliers.add(int(m.group(1)))
+        return sorted(p for p in paliers if p > 0)
+
+    def collecter_depuis_telechargements(
+        self, url_listing: str, categorie: str = "", max_pages: Optional[int] = None
+    ) -> list[Document]:
+        """Decouvre et telecharge directement les pieces jointes listees sur une page
+        hcp.ma/downloads/?tag=... (ex. URL_DERNIERES_PARUTIONS dans data/listing_urls.py).
+
+        Different de collecter_depuis_listing : sur ce systeme de telechargements,
+        chaque entree pointe DEJA vers le fichier telechargeable (/file/XXXXXX/) -- pas
+        de page article HTML intermediaire a visiter pour y chercher une piece jointe,
+        contrairement aux pages "Publications-<sous-theme>_rXXX.html". On va donc
+        directement de la decouverte au telechargement via _telecharger_piece_jointe,
+        et aucun Document de type "html" n'est cree ici (il n'y a pas de page article
+        separee du fichier lui-meme).
+
+        `max_pages` a la meme semantique que sur collecter_depuis_listing (voir
+        docstring) : max_pages=1 pour un usage "fraicheur" reguliere, None pour une
+        collecte historique complete.
+        """
+        documents: list[Document] = []
+        for titre, href, type_suppose, date_publication, langue in self._decouvrir_entrees_telechargements(
+            url_listing, max_pages=max_pages
+        ):
+            if langue == "ar" and not self.inclure_arabe:
+                print(f"[Scraper] entree telechargement arabe ignoree (hors scope V1) : {href}")
+                continue
+            url_piece = urljoin(url_listing, href)
+            try:
+                doc = self._telecharger_piece_jointe(
+                    url_piece, type_suppose, langue, titre, date_publication, categorie
+                )
+                if doc:
+                    documents.append(doc)
+            except requests.RequestException as e:
+                print(f"[Scraper] echec piece jointe {url_piece} : {e}")
+            time.sleep(self.delay)
+        return documents
+
+    def _decouvrir_entrees_telechargements(
+        self, url_listing: str, max_pages: Optional[int] = None
+    ) -> list[tuple[str, str, str, Optional[str], str]]:
+        """Parcourt une page hcp.ma/downloads/?tag=... paginee (parametre &p=N, voir
+        PATTERN_PARAM_P) et retourne les entrees trouvees : (titre, href, type_suppose,
+        date_publication, langue). Meme logique d'arret que decouvrir_urls_liste
+        (s'arrete des qu'une page ne remonte aucune nouvelle entree)."""
+        resp = requests.get(url_listing, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        entrees: list[tuple[str, str, str, Optional[str], str]] = []
+        vues = set()
+        for entree in self._extraire_entrees_telechargements(soup):
+            if entree[1] not in vues:
+                vues.add(entree[1])
+                entrees.append(entree)
+
+        paliers = self._increments_pagination_p(soup)
+        if max_pages is not None:
+            paliers = paliers[: max(0, max_pages - 1)]
+
+        for palier in paliers:
+            url_page = f"{url_listing}&p={palier}"
+            time.sleep(self.delay)
+            try:
+                resp = requests.get(url_page, headers=HEADERS, timeout=15)
+                resp.raise_for_status()
+            except requests.RequestException as e:
+                print(f"[Scraper] echec page telechargements {url_page} : {e}")
+                continue
+            soup_page = BeautifulSoup(resp.text, "lxml")
+            nouvelles = [e for e in self._extraire_entrees_telechargements(soup_page) if e[1] not in vues]
+            if not nouvelles:
+                break  # fin du listing atteinte (ou page vide) : inutile de continuer
+            for entree in nouvelles:
+                vues.add(entree[1])
+                entrees.append(entree)
+
+        return entrees
+
+    @staticmethod
+    def _extraire_entrees_telechargements(soup: BeautifulSoup) -> list[tuple[str, str, str, Optional[str], str]]:
+        """Repere les entrees d'une page hcp.ma/downloads/?tag=... : chaque entree est un
+        bloc `div.delimiter` contenant un titre + lien direct vers le fichier
+        (`div.titre_fichier a`), une icone de type (`img` dans `/_images/ext/...`), et
+        une date "Publie le : JJ/MM/AAAA". Structure HTML verifiee le 30/08 sur la page
+        reelle (tag "Dernieres parutions"), differente des pages
+        "Publications-<sous-theme>_rXXX.html" (voir _extraire_urls_articles)."""
+        resultats: list[tuple[str, str, str, Optional[str], str]] = []
+        for bloc in soup.select("div.delimiter"):
+            lien_titre = bloc.select_one(".titre_fichier a[href]")
+            if not lien_titre:
+                continue
+            href = lien_titre["href"]
+            titre = lien_titre.get_text(strip=True)
+
+            # Icones observees : icon_pdf.gif, icon_xlsx.gif, icon_docx.gif -- pas
+            # d'extension avec point (contrairement aux EXTENSIONS_* utilisees pour les
+            # hrefs), on cherche donc le nom du format directement dans le nom d'icone.
+            icone = bloc.select_one("img[src*='/_images/ext/']")
+            icone_src = (icone.get("src", "") if icone else "").lower()
+            if "xlsx" in icone_src or "xls" in icone_src:
+                type_suppose = "xlsx"
+            elif "docx" in icone_src or "doc" in icone_src:
+                type_suppose = "docx"
+            else:
+                type_suppose = "pdf"  # par defaut, meme convention que _detecter_pieces_jointes
+
+            texte_bloc = bloc.get_text(" ", strip=True)
+            m_date = re.search(r"Publi[ée] le\s*:\s*(\d{2}/\d{2}/\d{4})", texte_bloc)
+            date_publication = m_date.group(1) if m_date else None
+
+            langue = Scraper._detecter_langue(titre.lower())
+            resultats.append((titre, href, type_suppose, date_publication, langue))
+        return resultats
+
+    @staticmethod
+    def _increments_pagination_p(soup: BeautifulSoup) -> list[int]:
+        """Equivalent de _increments_pagination pour le parametre &p=N (pages
+        hcp.ma/downloads/?tag=...) plutot que ?start=N."""
+        paliers = set()
+        for a in soup.find_all("a", href=True):
+            m = PATTERN_PARAM_P.search(a["href"])
             if m:
                 paliers.add(int(m.group(1)))
         return sorted(p for p in paliers if p > 0)

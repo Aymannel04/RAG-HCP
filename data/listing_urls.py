@@ -82,6 +82,23 @@ URLS_LISTING_PAR_CATEGORIE = {
     "Population et demographie": URLS_LISTING_POPULATION_DEMOGRAPHIE,
 }
 
+# --- Flux transversal "Dernieres parutions" ---------------------------------------------
+# Trouve le 30/08 en diagnostiquant l'absence d'un document ("Chiffres cles 2026") pourtant
+# publie depuis plusieurs semaines : aucune des 3 categories ci-dessus ne le referencait,
+# car "Chiffres cles" est une publication transversale (tag "Publications generales" sur
+# hcp.ma), pas rattachee a un seul sous-theme -- les 3 categories ci-dessus ne couvrent que
+# les sous-themes Economie/Marche du travail/Population, jamais ce type de publication.
+#
+# hcp.ma/downloads/?tag=... est une base de telechargements A PART (voir commentaire en
+# tete de fichier), avec sa propre structure HTML et son propre systeme de pagination
+# (&p=N, pas ?start=N) -- voir Scraper.collecter_depuis_telechargements, distinct de
+# Scraper.collecter_depuis_listing utilise pour URLS_LISTING_PAR_CATEGORIE ci-dessus.
+# Le tag "Dernieres parutions" liste TOUTES les nouvelles publications, tous themes
+# confondus, avec un lien DIRECT vers le fichier telechargeable (/file/XXXXXX/) -- pas de
+# page article HTML intermediaire a visiter, contrairement aux pages Publications-<sous-
+# theme>_rXXX.html.
+URL_DERNIERES_PARUTIONS = "https://www.hcp.ma/downloads/?tag=Dernières+parutions"
+
 if __name__ == "__main__":
     total = sum(len(v) for v in URLS_LISTING_PAR_CATEGORIE.values())
     for cat, listings in URLS_LISTING_PAR_CATEGORIE.items():

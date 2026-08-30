@@ -328,3 +328,200 @@ def test_collecter_depuis_listing_enchaine_decouverte_et_collecter(mock_get):
     assert len(docs) == 1
     assert docs[0].titre == "Article un"
     assert docs[0].categorie == "Marche du travail"
+
+
+# --- Flux transversal "Dernieres parutions" (hcp.ma/downloads/?tag=...) -------------
+#
+# Trouve le 30/08 : "Chiffres cles 2026" restait absent du corpus alors que publie
+# depuis plusieurs semaines. Cause : aucune des 3 categories de listing_urls.py ne le
+# referencait (publication transversale, tag "Publications generales"). Structure HTML
+# reconstruite depuis la vraie page https://www.hcp.ma/downloads/?tag=Dernieres+parutions
+# (verifiee via navigateur le 30/08) : differente des pages Publications-<sous-theme>
+# ci-dessus -- chaque entree est un bloc div.delimiter avec un lien DIRECT vers le
+# fichier (/file/XXXXXX/), pas de page article HTML intermediaire.
+
+ENTREE_TELECHARGEMENT_TYPE = """
+<div class="delimiter">
+    <div style="float: left" class="photo"><a href="/file/248696/"><img src="/photo/thumb/248696.png" alt=""></a></div>
+    <div style="margin-left:85px">
+        <div class="titre_fichier"><a href="/file/248696/">Chiffres clés, 2026 (version arabe et anglaise)</a></div>
+        <div><a class="description" href="/file/248696/"></a></div><br>
+        <div class="information">
+            <a href="/file/248696/"><img src="/_images/ext/icon_pdf.gif" class="image" alt=""></a>
+ Publié le : 06/08/2026</div>
+        <div class="information" style="margin-top:5px">
+            <span>Tags : </span>
+            <a class="lien" href="/downloads/?tag=Chiffres+cl%C3%A9s">Chiffres clés</a>
+            <a class="lien" href="/downloads/?tag=Derni%C3%A8res+parutions">Dernières parutions</a>
+        </div>
+    </div>
+    <div style="clear: both"></div>
+</div>
+<div class="delimiter">
+    <div style="float: left" class="photo"><a href="/file/248688/"><img src="/_images/download_defaut.png" alt=""></a></div>
+    <div style="margin-left:85px">
+        <div class="titre_fichier"><a href="/file/248688/">Principaux indicateurs trimestriels rétropolés provisoires du marché du travail selon la méthodologie EMO, Période de 2017 à 2025</a></div>
+        <div><a class="description" href="/file/248688/"></a></div><br>
+        <div class="information">
+            <a href="/file/248688/"><img src="/_images/ext/icon_xlsx.gif" class="image" alt=""></a>
+ Publié le : 04/08/2026</div>
+    </div>
+</div>
+"""
+
+
+def test_extraire_entrees_telechargements_parse_titre_href_type_date():
+    # Note (trouve en ecrivant ce test, pas cherche expres) : le titre reel "...(version
+    # arabe et anglaise)" contient le mot "arabe", qui declenche _detecter_langue -> "ar"
+    # via l'heuristique existante (INDICES_ARABE) -- meme si le document n'est pas QUE en
+    # arabe. Ce n'est pas un probleme pratique ici : ce document precis a deja ete
+    # diagnostique comme illisible par le pipeline de chunking (mise en page dense
+    # bilingue, voir echange du 30/08), donc l'exclure par ce biais accessoire n'a pas
+    # de consequence negative pour l'instant. A revisiter si "Chiffres cles" doit un jour
+    # etre reellement indexe (voir piste B discutee : extraction visuelle).
+    soup = BeautifulSoup(ENTREE_TELECHARGEMENT_TYPE, "lxml")
+    resultats = Scraper._extraire_entrees_telechargements(soup)
+
+    assert resultats == [
+        ("Chiffres clés, 2026 (version arabe et anglaise)", "/file/248696/", "pdf", "06/08/2026", "ar"),
+        (
+            "Principaux indicateurs trimestriels rétropolés provisoires du marché du "
+            "travail selon la méthodologie EMO, Période de 2017 à 2025",
+            "/file/248688/",
+            "xlsx",
+            "04/08/2026",
+            "fr",
+        ),
+    ]
+
+
+def test_extraire_entrees_telechargements_detecte_langue_arabe_via_le_titre():
+    html = """
+    <div class="delimiter">
+        <div class="titre_fichier"><a href="/file/243619/">Point de conjoncture N° 50, Juillet 2026 (version Ar)</a></div>
+        <div class="information"><img src="/_images/ext/icon_pdf.gif"> Publié le : 16/07/2026</div>
+    </div>
+    """
+    soup = BeautifulSoup(html, "lxml")
+    resultats = Scraper._extraire_entrees_telechargements(soup)
+
+    assert resultats == [
+        ("Point de conjoncture N° 50, Juillet 2026 (version Ar)", "/file/243619/", "pdf", "16/07/2026", "ar")
+    ]
+
+
+def test_increments_pagination_p_deduits_des_liens_reels():
+    html = (
+        '<a href="https://www.hcp.ma/downloads/?tag=Dernières+parutions">1</a>'
+        '<a href="https://www.hcp.ma/downloads/?tag=Dernières+parutions&p=20">2</a>'
+    )
+    soup = BeautifulSoup(html, "lxml")
+    assert Scraper._increments_pagination_p(soup) == [20]
+
+
+@patch("src.scraper.requests.get")
+def test_decouvrir_entrees_telechargements_suit_la_pagination(mock_get):
+    page_1 = MagicMock()
+    page_1.text = (
+        '<div class="delimiter">'
+        '<div class="titre_fichier"><a href="/file/111/">Un</a></div>'
+        '<div class="information"><img src="/_images/ext/icon_pdf.gif"> Publié le : 06/08/2026</div>'
+        "</div>"
+        '<a href="https://www.hcp.ma/downloads/?tag=Dernières+parutions&p=20">2</a>'
+    )
+    page_1.raise_for_status = MagicMock()
+
+    page_2 = MagicMock()
+    page_2.text = (
+        '<div class="delimiter">'
+        '<div class="titre_fichier"><a href="/file/222/">Deux</a></div>'
+        '<div class="information"><img src="/_images/ext/icon_pdf.gif"> Publié le : 04/08/2026</div>'
+        "</div>"
+    )
+    page_2.raise_for_status = MagicMock()
+
+    mock_get.side_effect = [page_1, page_2]
+
+    scraper = Scraper(delay=0)
+    entrees = scraper._decouvrir_entrees_telechargements("https://www.hcp.ma/downloads/?tag=Dernières+parutions")
+
+    assert [href for _, href, _, _, _ in entrees] == ["/file/111/", "/file/222/"]
+    assert mock_get.call_count == 2
+
+
+@patch("src.scraper.requests.get")
+def test_decouvrir_entrees_telechargements_max_pages_1_ne_suit_pas_la_pagination(mock_get):
+    page_1 = MagicMock()
+    page_1.text = (
+        '<div class="delimiter">'
+        '<div class="titre_fichier"><a href="/file/111/">Un</a></div>'
+        '<div class="information"><img src="/_images/ext/icon_pdf.gif"> Publié le : 06/08/2026</div>'
+        "</div>"
+        '<a href="https://www.hcp.ma/downloads/?tag=Dernières+parutions&p=20">2</a>'
+    )
+    page_1.raise_for_status = MagicMock()
+    mock_get.return_value = page_1
+
+    scraper = Scraper(delay=0)
+    entrees = scraper._decouvrir_entrees_telechargements(
+        "https://www.hcp.ma/downloads/?tag=Dernières+parutions", max_pages=1
+    )
+
+    assert [href for _, href, _, _, _ in entrees] == ["/file/111/"]
+    assert mock_get.call_count == 1
+
+
+@patch("src.scraper.requests.get")
+@patch("src.scraper.Scraper._telecharger_piece_jointe")
+def test_collecter_depuis_telechargements_appelle_telecharger_piece_jointe_par_entree(
+    mock_telecharger, mock_get
+):
+    page_listing = MagicMock()
+    page_listing.text = ENTREE_TELECHARGEMENT_TYPE
+    page_listing.raise_for_status = MagicMock()
+    mock_get.return_value = page_listing
+
+    doc_pdf = MagicMock()
+    doc_xlsx = MagicMock()
+    mock_telecharger.side_effect = [doc_pdf, doc_xlsx]
+
+    # inclure_arabe=True : la 1ere entree du fixture ("...version arabe et anglaise")
+    # serait sinon filtree par _detecter_langue (voir note dans le test de parsing
+    # ci-dessus) -- non pertinent ici, ce test verifie l'enchainement decouverte ->
+    # telechargement par entree, pas le filtrage linguistique (deja teste separement).
+    scraper = Scraper(delay=0, inclure_arabe=True)
+    docs = scraper.collecter_depuis_telechargements(
+        "https://www.hcp.ma/downloads/?tag=Dernières+parutions",
+        categorie="Publications generales",
+        max_pages=1,
+    )
+
+    assert docs == [doc_pdf, doc_xlsx]
+    assert mock_telecharger.call_count == 2
+    premier_appel = mock_telecharger.call_args_list[0].args
+    assert premier_appel[0] == "https://www.hcp.ma/file/248696/"
+    assert premier_appel[1] == "pdf"
+    assert premier_appel[3] == "Chiffres clés, 2026 (version arabe et anglaise)"
+
+
+@patch("src.scraper.requests.get")
+@patch("src.scraper.Scraper._telecharger_piece_jointe")
+def test_collecter_depuis_telechargements_ecarte_les_entrees_arabes_par_defaut(mock_telecharger, mock_get):
+    html = """
+    <div class="delimiter">
+        <div class="titre_fichier"><a href="/file/111/">Note (version Ar)</a></div>
+        <div class="information"><img src="/_images/ext/icon_pdf.gif"> Publié le : 06/08/2026</div>
+    </div>
+    """
+    page_listing = MagicMock()
+    page_listing.text = html
+    page_listing.raise_for_status = MagicMock()
+    mock_get.return_value = page_listing
+
+    scraper = Scraper(delay=0)
+    docs = scraper.collecter_depuis_telechargements(
+        "https://www.hcp.ma/downloads/?tag=Dernières+parutions", max_pages=1
+    )
+
+    assert docs == []
+    mock_telecharger.assert_not_called()
