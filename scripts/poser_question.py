@@ -139,6 +139,11 @@ def poser_question(
             else []
         )
         question_effective = reformuler_si_necessaire(question, entrees_recentes, fonction_reformulation)
+        if question_effective != question:
+            # DEBUG TEMPORAIRE (a retirer une fois le diagnostic du 24/08 termine) :
+            # affiche dans le terminal ce que Mistral a reellement produit, pour voir
+            # si la reformulation part hors sujet avant meme d'atteindre le Routeur.
+            print(f"[DEBUG reformulation] '{question}' -> '{question_effective}'")
         type_question = routeur.classifier(question_effective)
 
         if type_question == TypeQuestion.CHIFFRE:
