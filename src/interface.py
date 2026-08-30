@@ -6,7 +6,7 @@ uniquement sur le pipeline déjà validé (Routeur -> LookupStructure/RetrievalR
 logique métier, seulement l'affichage. Streamlit choisi en Sprint 1 (ADR 0002) pour ce
 prototype.
 
-Décisions de conception (voir aussi echanges avec Ayman, 3 aout) :
+Décisions de conception:
 - Chargement des modèles lourds (BGE-M3, cross-encoder) via st.cache_resource.
 - La connexion SQLite n'est PAS mise en cache (thread-safety, cache_resource partagé
   entre toutes les sessions).

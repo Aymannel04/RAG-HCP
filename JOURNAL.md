@@ -1101,3 +1101,42 @@ de stage en fin de période, pas besoin d'être exhaustif.
   test qui prouve que meme une question deja autonome declenche l'appel des qu'un
   historique existe, et d'un test qui prouve qu'aucun appel n'est fait sur la toute
   premiere question d'une session). Suite complete : 187/187.
+
+## 30 aout 2026 — diagnostic tableaux/chunking + flux "Dernieres parutions" ajoute
+
+- Question de l'encadrante relayee par Ayman : le chunking est-il fiable sur des
+  donnees tabulaires hors BDS (PDF/XLSX) ? Test reel avec un PDF fourni par Ayman
+  ("Chiffres cles, 2026", brochure dense bilingue AR/EN) : `pdfplumber.extract_text()`
+  ressort un texte hache lettre par lettre (colonnes AR/EN entremelees), et
+  `extract_tables()` ne trouve quasiment rien d'exploitable. Verifie ensuite sur les 92
+  PDF reellement en cache (`data/raw/`) : le corpus actuel est globalement sain (88/92
+  OK), mais un cas de pollution reelle deja en base est trouve : document #75
+  ("Les Cahiers du Plan N 33", police arabe legacy) a 9 chunks de symboles bruts DEJA
+  indexes dans Chroma/BM25 aujourd'hui. Garde-fou (detecter texte illisible avant
+  chunking) propose mais pas encore implemente -- priorite plus basse que le point
+  suivant.
+- Ayman signale que "Chiffres cles 2026" est paru sur hcp.ma sans etre repris par le
+  corpus malgre le rafraichissement recent. Diagnostic : ni un probleme de tache
+  planifiee, ni de bug -- `data/listing_urls.py` ne couvre que 3 categories (Economie,
+  Marche du travail, Population/demographie), et "Chiffres cles" est une publication
+  transversale (tag "Publications generales" sur hcp.ma), rattachee a aucune d'elles.
+  Verifie en navigant reellement sur `hcp.ma/downloads/?tag=Dernieres+parutions` (piste
+  deja identifiee le 20 juillet mais jamais explorée) : confirme que ce tag liste bien
+  toutes les nouvelles publications, tous themes confondus, avec un lien direct vers le
+  fichier telechargeable (`/file/XXXXXX/`) -- structure HTML differente des pages
+  `Publications-<sous-theme>_rXXX.html` (pas de page article intermediaire, pagination
+  `&p=N` au lieu de `?start=N`).
+- Implemente : `Scraper.collecter_depuis_telechargements` (+ `_decouvrir_entrees_
+  telechargements`, `_extraire_entrees_telechargements`, `_increments_pagination_p`),
+  `URL_DERNIERES_PARUTIONS` dans `data/listing_urls.py`, cablage dans
+  `scripts/indexer_documents.py::main()` (2e flux apres les 3 categories existantes).
+  24 tests ajoutes dans `tests/test_scraper.py`, fixtures construites a partir du vrai
+  HTML de la page (verifie via navigateur). Suite complete : 203/203.
+- Effet de bord note en testant : le titre reel "Chiffres cles, 2026 (version arabe et
+  anglaise)" contient le mot "arabe", ce qui declenche le filtre linguistique existant
+  (`_detecter_langue`/`INDICES_ARABE`) et exclut ce document par defaut -- pas un bug a
+  proprement parler (heuristique concue pour "Document (version Ar)" = fichier
+  entierement en arabe, pas pour un titre qui *decrit* un contenu bilingue), et sans
+  consequence pratique vu que ce document est de toute facon illisible pour le
+  chunking actuel (voir point precedent). A revisiter ensemble si "Chiffres cles"
+  doit un jour etre reellement indexe.
