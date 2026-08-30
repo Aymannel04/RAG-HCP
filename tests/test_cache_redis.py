@@ -10,6 +10,7 @@ import pytest
 
 from src.cache_redis import (
     TTL_CACHE_NOTION,
+    TTL_HISTORIQUE,
     CacheReponses,
     HistoriqueConversation,
     normaliser_question,
@@ -110,3 +111,26 @@ def test_historique_sessions_distinctes_sont_isolees(client_redis):
 def test_historique_session_inconnue_renvoie_liste_vide(client_redis):
     historique = HistoriqueConversation(client_redis)
     assert historique.recuperer("session-inconnue") == []
+
+
+def test_historique_pose_un_ttl_de_24h(client_redis):
+    """Regression du bug trouve le 27/08 (voir JOURNAL.md) : la cle d'historique
+    n'avait auparavant aucune expiration (TTL -1, confirme en conditions reelles
+    via redis-cli), elle s'accumulait indefiniment."""
+    historique = HistoriqueConversation(client_redis)
+    historique.ajouter("session-1", "Question 1 ?", _reponse_notion())
+    cle = "rag_hcp:historique:session-1"
+    ttl = client_redis.ttl(cle)
+    assert 0 < ttl <= TTL_HISTORIQUE
+
+
+def test_historique_ttl_est_repousse_a_chaque_nouvel_ajout(client_redis):
+    """Le TTL est glissant : un deuxieme message dans la meme session ne doit
+    jamais faire baisser le TTL en dessous de ce qu'il etait juste apres le
+    premier -- une conversation active ne doit jamais expirer en cours de route."""
+    historique = HistoriqueConversation(client_redis)
+    historique.ajouter("session-1", "Question 1 ?", _reponse_notion())
+    cle = "rag_hcp:historique:session-1"
+    client_redis.expire(cle, 10)  # simule un TTL presque expire
+    historique.ajouter("session-1", "Question 2 ?", _reponse_notion())
+    assert client_redis.ttl(cle) > 10

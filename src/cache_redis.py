@@ -56,6 +56,7 @@ from typing import Optional
 from .generateur import Reponse
 
 TTL_CACHE_NOTION = 24 * 60 * 60  # 24h, aligné sur decouverte_publications.py --quotidien
+TTL_HISTORIQUE = 24 * 60 * 60  # 24h glissant -- voir docstring de HistoriqueConversation.ajouter
 PREFIXE_CACHE = "rag_hcp:cache_notion:"
 PREFIXE_HISTORIQUE = "rag_hcp:historique:"
 
@@ -106,10 +107,19 @@ class HistoriqueConversation:
         self._client = client_redis
 
     def ajouter(self, id_session: str, question: str, reponse: Reponse) -> None:
+        """Ajoute un echange, avec un TTL glissant de 24h sur la cle de session
+        (bug trouve le 27/08, voir JOURNAL.md -- cette cle n'avait jusqu'ici AUCUNE
+        expiration, contrairement au cache : elle s'accumulait indefiniment dans
+        Redis). `expire()` est rappele a chaque ajout plutot que fixe une seule fois
+        a la creation : une conversation active voit son TTL repousse a chaque
+        message, seule une session vraiment abandonnee finit par expirer -- jamais
+        de coupure en pleine conversation."""
         if self._client is None:
             return
         entree = json.dumps({"question": question, "reponse": asdict(reponse)})
-        self._client.rpush(PREFIXE_HISTORIQUE + id_session, entree)
+        cle = PREFIXE_HISTORIQUE + id_session
+        self._client.rpush(cle, entree)
+        self._client.expire(cle, TTL_HISTORIQUE)
 
     def recuperer(self, id_session: str) -> list[dict]:
         """Renvoie la liste des échanges (question + réponse, dans l'ordre
