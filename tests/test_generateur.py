@@ -138,6 +138,41 @@ def test_generer_reponse_notion_avec_fonction_generation_injectee(conn, id_docum
     assert "10 ans" in contexte_envoye
 
 
+def test_generer_reponse_notion_degrade_proprement_si_generation_echoue(conn, id_document):
+    """Regression du bug trouve en conditions reelles (voir JOURNAL.md) : une
+    ConnectionError de Mistral pendant _generer_reponse_notion faisait planter tout
+    le pipeline (et donc l'interface Streamlit) avant ce correctif -- aucun
+    try/except n'entourait l'appel a `fonction_generation`, seul endroit du projet
+    dans ce cas alors que Routeur/Reformulateur degradent deja proprement."""
+    def generation_qui_plante(question: str, texte_contexte: str) -> str:
+        raise ConnectionError("Connection aborted (simulation)")
+
+    generateur = Generateur(conn, fonction_generation=generation_qui_plante)
+    chunks = [Chunk(id_chunk=None, id_document=id_document, texte="Un passage.", position=0)]
+
+    reponse = generateur.generer_reponse("C'est quoi le RGPH ?", chunks)  # ne doit pas lever
+
+    assert "erreur" in reponse.texte.lower() or "reseau" in reponse.texte.lower()
+    assert reponse.source_url == ""
+
+
+def test_generer_reponse_mixte_degrade_vers_chiffre_seul_si_generation_echoue(conn, id_document, id_document_narratif):
+    """Meme regression que ci-dessus, chemin mixte : le chiffre officiel ne depend
+    d'aucun LLM, donc une panne de l'explication ne doit jamais priver l'utilisateur
+    du chiffre deja calcule par le gabarit deterministe."""
+    def generation_qui_plante(question: str, texte_contexte: str) -> str:
+        raise ConnectionError("Connection aborted (simulation)")
+
+    generateur = Generateur(conn, fonction_generation=generation_qui_plante)
+    chunks = [Chunk(id_chunk=None, id_document=id_document_narratif, texte="Texte.", position=0)]
+    contexte = ContexteMixte(indicateur=_indicateur_chomage(id_document), chunks=chunks)
+
+    reponse = generateur.generer_reponse("Pourquoi le taux de chômage a-t-il augmenté ?", contexte)  # ne doit pas lever
+
+    assert "13.3%" in reponse.texte
+    assert reponse.source_url == "https://bds.hcp.ma/main/indicators/I4001"
+
+
 def test_generer_reponse_document_source_inconnu_ne_plante_pas(conn):
     generateur = Generateur(conn)
     indicateur = Indicateur(

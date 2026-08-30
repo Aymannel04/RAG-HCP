@@ -167,7 +167,21 @@ class Generateur:
             )
 
         texte_contexte = "\n\n".join(chunk.texte for chunk in chunks)
-        texte = self._fonction_generation(question, texte_contexte)
+        try:
+            texte = self._fonction_generation(question, texte_contexte)
+        except Exception:
+            # Degradation propre (voir bug du 24/08 -- ConnectionError Mistral qui
+            # faisait planter toute l'interface Streamlit) : meme philosophie que le
+            # fallback LLM de Routeur/Reformulateur, jamais applique ici jusqu'a
+            # present. Une panne reseau/API ne doit jamais faire crasher tout le
+            # pipeline, seulement degrader vers un message explicite.
+            return Reponse(
+                texte=(
+                    "Une erreur technique (reseau ou service de generation indisponible) "
+                    "a empeche de repondre a cette question. Reessayez dans quelques instants."
+                ),
+                source_url="", source_titre="", source_date=None,
+            )
 
         titre, url, date_publication = self._recuperer_document(chunks[0].id_document)
         return Reponse(texte=texte, source_url=url, source_titre=titre, source_date=date_publication)
@@ -193,7 +207,13 @@ class Generateur:
             f"Chiffre officiel a mentionner tel quel si utile : {phrase_chiffree}\n\n"
             + "\n\n".join(chunk.texte for chunk in contexte.chunks)
         )
-        explication = self._fonction_generation(question, texte_contexte)
+        try:
+            explication = self._fonction_generation(question, texte_contexte)
+        except Exception:
+            # Degradation propre (voir docstring de _generer_reponse_notion) : le
+            # chiffre officiel reste fiable puisqu'il ne depend d'aucun appel LLM --
+            # une panne de l'explication ne doit pas priver l'utilisateur du chiffre.
+            return Reponse(texte=phrase_chiffree, source_url=url_chiffre, source_titre=titre_chiffre, source_date=date_chiffre)
         texte = f"{phrase_chiffree} {explication}"
 
         titre_notion, url_notion, date_notion = self._recuperer_document(contexte.chunks[0].id_document)
