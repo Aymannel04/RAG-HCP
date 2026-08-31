@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.llm_mistral import generer, reformuler_question
+from src.llm_mistral import PROMPT_SYSTEME_REFORMULATION, generer, reformuler_question
 
 
 def test_generer_leve_une_erreur_claire_si_cle_api_absente(monkeypatch):
@@ -99,3 +99,18 @@ def test_reformuler_question_propage_les_erreurs_http(mock_post, monkeypatch):
 
     with pytest.raises(Exception, match="HTTP 401"):
         reformuler_question("explique ça", "Q: x\nR: y")
+
+
+# --- Regression reelle du 30/08 : prompt durci contre la contamination hors-sujet -----
+#
+# Bug observe en conditions reelles (voir JOURNAL.md) : une question deja autonome et
+# sans rapport avec le sujet de l'historique se faisait quand meme enrichir de details
+# venant de l'historique. La qualite reelle de la reformulation ne peut se verifier
+# qu'en conditions reelles (vrai appel Mistral, voir echange avec Ayman) -- ce test se
+# contente de verifier que le prompt envoye au modele contient bien la nouvelle regle
+# explicite, pas que le modele la respecte a 100% (impossible a garantir sans reseau).
+
+def test_prompt_reformulation_interdit_explicitement_le_changement_de_sujet():
+    assert "change" in PROMPT_SYSTEME_REFORMULATION.lower()
+    assert "exactement telle quelle" in PROMPT_SYSTEME_REFORMULATION.lower()
+    assert "n'est pas une raison de" in PROMPT_SYSTEME_REFORMULATION.lower()

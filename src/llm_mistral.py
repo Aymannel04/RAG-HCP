@@ -87,13 +87,21 @@ PROMPT_SYSTEME_CLASSIFICATION = (
 PROMPT_SYSTEME_REFORMULATION = (
     "Tu recois une question de suivi posee a un systeme de questions-reponses sur les "
     "statistiques publiques du Maroc (HCP), ainsi que les derniers echanges de la "
-    "conversation. Reecris la question de suivi en une question autonome et complete, "
-    "comprehensible SANS le reste de la conversation -- remplace les mots vagues ('ça', "
-    "'ce chiffre', 'cette periode') et les sujets sous-entendus par ce qu'ils designent "
-    "reellement dans l'historique. Ne reponds PAS a la question, ne rajoute aucune "
-    "information qui ne provient pas de la question ou de l'historique fournis. Reponds "
-    "UNIQUEMENT par la question reformulee, en francais, sans aucun commentaire ni "
-    "guillemets."
+    "conversation. Ta seule tache : decider si cette question a BESOIN du contexte de "
+    "la conversation pour etre comprise, et la reecrire seulement si oui.\n\n"
+    "Cas 1 -- la question contient un mot vague ou une reference implicite ('ça', 'ce "
+    "chiffre', 'cette periode', 'et pour...', 'et en...') qui ne se comprend qu'avec "
+    "l'historique : remplace UNIQUEMENT ce mot ou cette reference par ce qu'il designe "
+    "reellement dans l'historique, sans rien ajouter d'autre.\n"
+    "Cas 2 -- la question est deja comprehensible toute seule, meme si elle change "
+    "completement de sujet par rapport a l'historique (ex. l'historique parle de "
+    "population et la question de suivi demande un taux d'urbanisation) : renvoie-la "
+    "EXACTEMENT telle quelle, sans y ajouter aucun mot, aucun sujet, aucune annee "
+    "venant de l'historique. Un changement de sujet n'est PAS une raison de "
+    "reformuler.\n\n"
+    "Ne reponds JAMAIS a la question, ne devine jamais une information absente de la "
+    "question et de l'historique. Reponds UNIQUEMENT par la question (reformulee ou "
+    "inchangee), en francais, sans aucun commentaire ni guillemets."
 )
 
 
@@ -101,10 +109,23 @@ def reformuler_question(question: str, historique_texte: str) -> str:
     """Fonction de reformulation compatible avec `src/reformulateur.py`
     (TypeFonctionReformulation) : (question, historique_texte) -> question autonome.
 
-    Appelee seulement pour les questions qui RESSEMBLENT a un follow-up ambigu (voir
-    `src/reformulateur.py::ressemble_a_un_followup`) -- jamais systematiquement, pour ne
-    pas payer un appel LLM sur des questions deja autonomes (voir discussion avec Ayman,
-    23/08 -- Option C choisie explicitement pour ce compromis).
+    Appelee des qu'un historique REEL existe pour la session (voir
+    `src/reformulateur.py::reformuler_si_necessaire` -- l'heuristique de detection de
+    follow-up ambigu, evoquee ici a l'origine, a ete essayee puis abandonnee le 23/08,
+    peu fiable en conditions reelles). "Reel" depuis le 30/08 : les echanges de simple
+    salutation sont ecartes de l'historique avant reformulation (voir
+    `src/reformulateur.py::_filtrer_salutations`).
+
+    PROMPT_SYSTEME_REFORMULATION durci le 30/08 (bug reel observe en conditions
+    reelles, voir JOURNAL.md) : une question deja autonome et SANS RAPPORT avec le
+    sujet de l'historique ("donne taux d'urbanisation" apres une conversation sur la
+    population) se faisait quand meme enrichir de details de l'historique ("...de la
+    population du Maroc pour l'annee 2026...") -- la premiere version du prompt
+    autorisait explicitement a puiser des informations "dans l'historique fourni",
+    sans jamais dire de s'abstenir quand la question n'en a pas besoin. Le prompt
+    distingue desormais explicitement deux cas (reference vague a resoudre vs question
+    deja autonome meme si elle change de sujet) avec un exemple concret de ce dernier
+    cas, plutot qu'une regle generale ambigue.
 
     À injecter tel quel : `poser_question(..., fonction_reformulation=reformuler_question)`.
     """

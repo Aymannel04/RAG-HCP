@@ -143,6 +143,24 @@ def test_rechercher_indicateur_mot_distinctif_unique_reste_accepte(conn):
     assert resultat.nom == "Taux d'urbanisation"
 
 
+def test_rechercher_indicateur_match_ambigu_sur_2_mots_communs_entre_sujets_sans_rapport_renvoie_none(conn):
+    # Regression reelle (30/08, voir JOURNAL.md) : une question reformulee de travers
+    # par le LLM de reformulation a matche a EGALITE (score 2 chacun) deux indicateurs
+    # totalement sans rapport -- "Taux de chomage..." (via "taux"+"chomage") et
+    # "Population du Maroc..." (via "population"+"maroc"). Avant le correctif, le refus
+    # d'ambiguite ne se declenchait que pour un score <= 1 : le code choisissait alors
+    # silencieusement "Population du Maroc..." (premier insere) au lieu de refuser.
+    _peupler_indicateurs_realistes(conn)
+    _peupler_serie_avec_projection(conn)  # ajoute "Population du Maroc par annee civile"
+
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        "Quel est le taux de chômage au Maroc selon le Recensement Général de "
+        "l'Habitat et de la Population (RGPH) ?"
+    )
+
+    assert resultat is None
+
+
 def test_rechercher_indicateur_sans_accents_matche_quand_meme(conn):
     # Regression : "chomage" tape sans accent ne correspondait pas a "chômage" en
     # base -- faisait basculer a tort sur RetrievalReranker au lieu de la reponse
@@ -328,3 +346,56 @@ def test_ventilation_branche_activite_est_resolue(conn):
     assert resultat is not None
     assert resultat.region == "Agriculture"
     assert resultat.valeur == pytest.approx(120.5)
+
+
+# --- Ligne agregee ET lignes ventilees coexistent -- corrige le 31/08 (bug reel
+# observe en conditions reelles, voir JOURNAL.md). ------------------------------------
+
+def _peupler_indicateur_avec_agregat_et_ventilations(conn):
+    """Reproduit le cas reel I4001 ("Taux de chomage selon le Milieu, le sexe et le
+    groupe d'ages") : des lignes ventilees a un seul label (Urbain/Rural/Masculin/
+    Feminin, jamais croisees entre elles dans ce sous-ensemble) COEXISTENT avec une
+    vraie ligne agregee nationale (region IS NULL). Avant le correctif, une question
+    sans dimension demandee matchait a egalite plusieurs de ces combinaisons a un seul
+    label et etait donc refusee (None), sans jamais considerer la ligne agregee,
+    pourtant la reponse correcte."""
+    id_doc = _document_synthetique(conn)
+    lignes = [
+        ("Taux de chômage national", 13.3, "%", "2024", None),
+        ("Taux de chômage national", 13.0, "%", "2023", None),
+        ("Taux de chômage national", 12.9, "%", "2024", "Urbain"),
+        ("Taux de chômage national", 9.5, "%", "2024", "Rural"),
+        ("Taux de chômage national", 11.8, "%", "2024", "Masculin"),
+        ("Taux de chômage national", 16.2, "%", "2024", "Féminin"),
+    ]
+    for nom, valeur, unite, periode, region in lignes:
+        inserer_indicateur(conn, Indicateur(
+            id_indicateur=None, nom=nom, valeur=valeur, unite=unite, periode=periode,
+            region=region, id_document=id_doc, code_bds="I4001",
+        ))
+    return id_doc
+
+
+def test_ventilation_aucune_dimension_avec_agregat_coexistant_choisit_lagregat(conn):
+    _peupler_indicateur_avec_agregat_et_ventilations(conn)
+
+    resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de chômage ?")
+
+    assert resultat is not None
+    assert resultat.region is None
+    assert resultat.valeur == pytest.approx(13.3)  # periode la plus recente (2024)
+
+
+def test_ventilation_dimension_explicite_avec_agregat_coexistant_reste_ventilee(conn):
+    # L'ajout de la ligne agregee comme candidate ne doit s'appliquer que quand AUCUNE
+    # dimension n'est demandee -- une question qui precise "urbain" doit toujours
+    # recevoir la ligne ventilee correspondante, pas l'agregat.
+    _peupler_indicateur_avec_agregat_et_ventilations(conn)
+
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        "Quel est le taux de chômage en milieu urbain ?"
+    )
+
+    assert resultat is not None
+    assert resultat.region == "Urbain"
+    assert resultat.valeur == pytest.approx(12.9)

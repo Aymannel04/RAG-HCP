@@ -96,3 +96,111 @@ def test_reformuler_si_necessaire_reponse_vide_retombe_sur_la_question_originale
         "explique ça", entrees_historique=_historique_factice(), fonction_reformulation=lambda q, h: "   ",
     )
     assert resultat == "explique ça"
+
+
+# --- Regression reelle du 30/08 : filtrage des salutations avant reformulation --------
+#
+# Bug observe en conditions reelles (voir JOURNAL.md) : une session qui commence par
+# "hello" stocke cet echange dans l'historique -- le message d'accueil canned cite en
+# exemple "taux de chomage, population...". Pour la question suivante ("c quoi rghp"),
+# la reformulation systematique utilisait "hello" comme "historique", et le LLM a
+# fabrique une question totalement hors-sujet en piochant dans ces exemples.
+
+def _historique_salutation_seule():
+    return [
+        {
+            "question": "hello",
+            "reponse": {
+                "texte": (
+                    "Bonjour ! Je suis l'assistant du HCP. Posez-moi une question sur les "
+                    "statistiques et publications du Haut-Commissariat au Plan (ex. taux de "
+                    "chômage, population, indice des prix...)."
+                ),
+            },
+        },
+    ]
+
+
+def test_reformuler_si_necessaire_historique_uniquement_salutation_ne_reformule_pas():
+    # Traite comme "pas d'historique du tout" -- meme comportement que la toute
+    # premiere question d'une session (voir test sans historique ci-dessus).
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(question)
+        return "PEU IMPORTE, NE DOIT JAMAIS ETRE APPELE"
+
+    resultat = reformuler_si_necessaire(
+        "c quoi rghp",
+        entrees_historique=_historique_salutation_seule(),
+        fonction_reformulation=fonction_reformulation,
+    )
+
+    assert resultat == "c quoi rghp"
+    assert appels == []  # la fonction de reformulation n'a jamais ete appelee
+
+
+def test_reformuler_si_necessaire_salutation_puis_vraie_question_ne_montre_que_la_vraie_question():
+    # Historique mixte (salutation + vraie question) : la salutation est ecartee du
+    # contexte envoye au LLM, seule la vraie question reste visible.
+    historique = _historique_salutation_seule() + _historique_factice()
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(historique_texte)
+        return "Quelle est la population du Maroc pour la derniere annee disponible ?"
+
+    reformuler_si_necessaire(
+        "du derniere annee ?", entrees_historique=historique, fonction_reformulation=fonction_reformulation,
+    )
+
+    assert len(appels) == 1
+    historique_envoye = appels[0]
+    assert "hello" not in historique_envoye
+    assert "taux de ch" not in historique_envoye.lower()  # ni "chômage" ni "chomage" du message d'accueil
+    assert "population de maroc" in historique_envoye  # la vraie question, elle, reste presente
+
+
+def test_reformuler_si_necessaire_salutation_de_cloture_est_aussi_filtree():
+    # "merci"/"au revoir" sont aussi des salutations (voir PATTERN_SALUTATION dans
+    # src/routeur.py) -- meme traitement que "hello".
+    historique = [
+        {"question": "merci", "reponse": {"texte": "Avec plaisir ! N'hésitez pas si vous avez d'autres questions."}},
+    ]
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(question)
+        return "PEU IMPORTE, NE DOIT JAMAIS ETRE APPELE"
+
+    resultat = reformuler_si_necessaire(
+        "et le taux d'urbanisation", entrees_historique=historique, fonction_reformulation=fonction_reformulation,
+    )
+
+    assert resultat == "et le taux d'urbanisation"
+    assert appels == []
+
+
+def test_reformuler_si_necessaire_question_avec_salutation_et_signal_chiffre_reste_utilisee():
+    # Piege evite : "Bonjour, quel est le taux de chômage ?" contient bien "bonjour",
+    # mais Routeur.classifier la classe CHIFFRE (le signal chiffre l'emporte, voir
+    # src/routeur.py) -- ce n'est PAS une salutation pure, elle doit rester visible dans
+    # le contexte de reformulation, contrairement a un simple test sur le mot "bonjour".
+    historique = [
+        {
+            "question": "Bonjour, quel est le taux de chômage ?",
+            "reponse": {"texte": "D'après les données du HCP, le taux de chômage est de 13.3%."},
+        },
+    ]
+    appels = []
+
+    def fonction_reformulation(question, historique_texte):
+        appels.append(historique_texte)
+        return "Quel est le taux de chômage pour les femmes ?"
+
+    reformuler_si_necessaire(
+        "et pour les femmes ?", entrees_historique=historique, fonction_reformulation=fonction_reformulation,
+    )
+
+    assert len(appels) == 1
+    assert "taux de ch" in appels[0].lower()  # la question chiffree reste bien dans le contexte

@@ -1140,3 +1140,102 @@ de stage en fin de période, pas besoin d'être exhaustif.
   consequence pratique vu que ce document est de toute facon illisible pour le
   chunking actuel (voir point precedent). A revisiter ensemble si "Chiffres cles"
   doit un jour etre reellement indexe.
+
+## 30 aout 2026 (suite) — retest reel post-corrections : 3 nouveaux bugs reels trouves
+
+Retest en conditions reelles apres les corrections du jour (crash Generateur,
+duplication chunks, TTL historique) -- exactement comme prevu (JOURNAL.md, section
+precedente : "on ne fait le test de fiabilite qu'apres avoir stabilise les bugs
+connus"). Trois bugs reels trouves des les premiers echanges, tous corriges le jour
+meme.
+
+**Bug 1 -- le message d'accueil contamine la reformulation.** Session : "hello" puis
+"c quoi rghp" (typo de RGPH). Reponse : un chiffre de population totalement hors
+sujet. Log `[DEBUG reformulation]` (garde le 23/08, cf. plus haut) confirme :
+`'c quoi rghp' -> 'Quel est le taux de chômage au Maroc selon le Recensement Général
+de l'Habitat et de la Population (RGPH) ?'`. Cause : la reformulation systematique
+(decision du 23/08) se declenche des qu'un historique existe -- "hello" y compris.
+Le message d'accueil canned (`MESSAGE_ACCUEIL`) cite en exemple "taux de chomage,
+population..." ; Mistral, invite a puiser dans l'historique, a pris ces exemples au
+pied de la lettre.
+
+**Bug 2 -- LookupStructure choisissait silencieusement en cas d'egalite a 2+ mots.**
+Meme question corrompue : verifie avec le vrai code sur la vraie base, elle matche a
+EGALITE (score 2) "Taux de chomage..." ET "Population du Maroc..." -- deux
+indicateurs sans rapport. L'ancien refus d'ambiguite ne se declenchait que pour un
+score <= 1 (pense pour le seul cas "taux" partage par presque tout le monde).
+
+**Bug 3 -- une question deja autonome se fait quand meme enrichir par l'historique.**
+Trouve en continuant le test : "donne taux d'urbanisation" (question complete et
+independante) precedee d'un echange sur la population -> reformulee en "...taux
+d'urbanisation **de la population du Maroc pour l'annee 2026**...". Verifie que le
+Bug 2 (egalite) ne s'applique pas ici : "Population du Maroc..." gagne franchement
+(score 3, {population, maroc, annee}) contre "Taux d'urbanisation" (score 2, {taux,
+urbanisation}) -- pas une egalite a refuser, un choix confiant mais fonde sur une
+question deja corrompue en amont.
+
+**Corrections :**
+- `src/reformulateur.py::_filtrer_salutations` (nouveau) : ecarte les echanges
+  classes SALUTATION (reutilise `Routeur.classifier`, pas un simple test sur le texte
+  -- "Bonjour, quel est le taux de chomage ?" reste CHIFFRE, pas exclu) de
+  l'historique AVANT de decider si on reformule et avant de construire le contexte
+  envoye au LLM. Un historique qui ne contient QUE des salutations est traite comme
+  s'il n'y avait pas d'historique du tout (regle Bug 1).
+- `src/lookup_structure.py::_meilleur_nom_correspondant` : le refus d'ambiguite
+  s'applique desormais aussi a un score > 1, mais SEULEMENT si les candidats a
+  egalite ne partagent pas exactement le meme ensemble de mots correspondants (regle
+  Bug 2). Premiere version (refuser TOUTE egalite sans condition) trop large : cassait
+  "Quel est le taux de chomage actuel ?" (egalite legitime entre deux ventilations du
+  MEME indicateur, memes mots exacts {taux, chomage}) -- 4 tests casses, retrouves et
+  corriges avant de committer.
+- `src/llm_mistral.py::PROMPT_SYSTEME_REFORMULATION` (regle Bug 3) : reecrit pour
+  distinguer explicitement deux cas -- reference vague a resoudre (comme avant) vs
+  question deja autonome MEME SI elle change de sujet (renvoyer telle quelle, sans
+  rien ajouter). Exemple concret inclus dans le prompt (population -> urbanisation)
+  pour guider le modele, l'instruction generale seule ayant echoue en pratique.
+  Correction non testable unitairement au-dela du contenu du prompt (qualite reelle
+  = appel Mistral reel) -- a revalider en conditions reelles avec Ayman.
+- 6 nouveaux tests (1 `test_lookup_structure.py`, 4 `test_reformulateur.py`, 1
+  `test_llm_mistral.py`). Suite complete : 209/209.
+
+Le test en conditions reelles continue (Ayman va revalider Bug 1 et Bug 3 dans
+Streamlit) -- prochains bugs eventuels a traiter au fur et a mesure, meme methode.
+
+## 31 aout 2026 — retest reel (suite) : 4e bug reel, ventilation ignorait la ligne agregee
+
+Bug 1 et Bug 3 revalides OK par Ayman en conditions reelles (RGPH et urbanisation
+repondent correctement). Test continue, 4e bug trouve : "taux de chomage" seul (sans
+dimension), "donne taux de chomage au maroc", et "taux de population en 2024" ne
+donnaient pas de reponse CHIFFRE propre -- basculaient sur RetrievalReranker (reponse
+narrative multi-region incoherente, ou "aucune donnee globale" alors qu'une vraie
+valeur nationale existe).
+
+**Diagnostic** (verifie directement sur la vraie base, pas de suppositions) :
+`_meilleur_nom_correspondant("taux de chomage", noms)` identifie correctement
+l'indicateur ("Taux de chômage selon le Milieu, le sexe et le groupe d'âges", I4001).
+Le probleme est en aval, dans `_resoudre_ventilation` : cet indicateur publie A LA FOIS
+des lignes ventilees a un seul label (Urbain, Rural, Masculin, Feminin, jamais croisees
+dans ce sous-ensemble) ET une vraie ligne agregee nationale (region IS NULL, valeurs
+reelles verifiees : 13.3%/2024, 13.0%/2025...). Sans dimension demandee, les 4
+combinaisons a un seul label se retrouvaient a egalite (meme score de "labels en
+trop") et etaient donc refusees comme ambigues -- l'algorithme ne considerait jamais
+la ligne agregee, pourtant juste a cote et sans aucune ambiguite possible.
+
+**Correction** (`src/lookup_structure.py`) :
+- `rechercher_indicateur` verifie desormais si une ligne `region IS NULL` existe pour
+  l'indicateur cible (`ligne_agregee_existe`) et le signale a `_resoudre_ventilation`.
+- `_resoudre_ventilation` (nouveau parametre `ligne_agregee_existe`) : quand aucune
+  dimension n'est demandee, ajoute la ligne agregee comme candidate a part entiere
+  avec 0 label en trop -- elle gagne donc toujours face aux combinaisons ventilees
+  (qui ont forcement >= 1 label), sans introduire de nouveau risque d'ambiguite (une
+  combinaison ventilee ne peut jamais avoir 0 label en trop si `requis` est vide).
+- Docstring de module (section "Ventilation") complete avec un point 5 documentant ce
+  cas et sa resolution.
+- 2 nouveaux tests dans `test_lookup_structure.py` : cas agregat+ventilations
+  coexistants sans dimension demandee (doit choisir l'agregat), et avec dimension
+  explicite (doit toujours choisir la ventilation, comportement inchange). Suite
+  complete : 211/211.
+- Verifie sur la vraie base (`data/hcp_rag.db`) : "taux de chômage" renvoie maintenant
+  13.0% (2025, region=None, I4001) au lieu de None.
+
+A faire valider par Ayman en conditions reelles dans Streamlit.

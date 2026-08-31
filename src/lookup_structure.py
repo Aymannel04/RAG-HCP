@@ -70,6 +70,19 @@ indicateurs curés -- voir data/indicateurs_cures.py) :
    composée uniquement de labels agrégat, et refuse (None) si aucune n'existe --
    corrige un bug latent où l'ancien code renvoyait alors une ligne arbitraire (ordre
    d'insertion) présentée comme si elle couvrait toute la population.
+5. Corrigé le 31/08 (bug réel observé en conditions réelles, voir JOURNAL.md) : certains
+   indicateurs (ex. "Taux de chômage selon le Milieu, le sexe et le groupe d'âges")
+   publient À LA FOIS des lignes ventilées ET une vraie ligne agrégée nationale
+   (region IS NULL). Le point 3 ci-dessus ne comparait qu'entre combinaisons ventilées
+   -- pour une question sans dimension demandée ("taux de chômage" seul), plusieurs
+   combinaisons à un seul label (Urbain, Rural, Masculin, Féminin...) se retrouvaient à
+   égalité (même score) et étaient donc refusées comme ambiguës, alors que la ligne
+   agrégée (la vraie réponse attendue) existait juste à côté et n'était jamais
+   considérée. `rechercher_indicateur` détecte maintenant l'existence de cette ligne
+   agrégée et la signale à `_resoudre_ventilation` via `ligne_agregee_existe` : quand
+   aucune dimension n'est demandée, cette ligne est ajoutée comme candidate avec 0
+   label en trop -- elle l'emporte donc toujours sur les combinaisons ventilées (qui
+   ont forcément au moins 1 label), sans risque de nouvelle ambiguïté.
 
 Limite qui reste réelle après ce correctif : la qualité de la réponse dépend de ce que
 l'API BDS publie vraiment. Si un indicateur ne publie que des lignes pleinement croisées
@@ -255,7 +268,20 @@ class LookupStructure:
         ]
 
         if valeurs_region:
-            region = self._resoudre_ventilation(question, valeurs_region)
+            # Corrige le 31/08 (bug reel observe en conditions reelles, voir
+            # JOURNAL.md) : certains indicateurs (ex. I4001, "Taux de chomage selon le
+            # Milieu...") ont A LA FOIS des lignes ventilees ET une ligne agregee
+            # nationale (region IS NULL). Sans le savoir, _resoudre_ventilation ne
+            # cherchait qu'entre les combinaisons ventilees -- pour une question sans
+            # dimension demandee ("taux de chomage" seul), plusieurs combinaisons a un
+            # seul label (Urbain, Rural, Masculin, Feminin...) etaient a egalite, donc
+            # refusees comme ambigues, alors que la ligne agregee (la vraie reponse
+            # attendue) existait juste a cote. On signale maintenant son existence a
+            # _resoudre_ventilation, qui la traite comme un candidat a part entiere.
+            ligne_agregee_existe = self._conn.execute(
+                "SELECT 1 FROM indicateur WHERE nom = ? AND region IS NULL LIMIT 1", (nom,)
+            ).fetchone() is not None
+            region = self._resoudre_ventilation(question, valeurs_region, ligne_agregee_existe)
             if region is _AUCUNE_VENTILATION_FIABLE:
                 return None
         else:
@@ -322,13 +348,34 @@ class LookupStructure:
         decrocher le meme score (1) a quasiment tous les indicateurs de la base, et un
         simple tie-break (premier insere) choisirait arbitrairement un indicateur non
         pertinent avec une reponse presentee comme sure d'elle. D'ou le refus de tout
-        match ambigu : si plusieurs noms sont a egalite sur le meilleur score ET que ce
-        score ne repose que sur un seul mot partage (typiquement "taux" seul), on
+        match ambigu : si plusieurs noms sont a egalite sur le meilleur score, on
         renvoie None plutot que de trancher au hasard -- le Routeur bascule alors sur
         RetrievalReranker (voir scripts/poser_question.py), plus honnete qu'une valeur
-        chiffree associee au mauvais indicateur. Un score de 1 SANS ambiguite (un seul
-        nom candidat, ex. correspondance sur un mot distinctif comme "urbanisation")
-        reste accepte.
+        chiffree associee au mauvais indicateur. Un score SANS ambiguite (un seul nom
+        candidat, ex. correspondance sur un mot distinctif comme "urbanisation") reste
+        accepte, quel que soit le score.
+
+        Corrige le 30/08 (bug reel observe en conditions reelles, voir JOURNAL.md) : le
+        refus d'ambiguite ne se declenchait auparavant que si le score maximal etait <= 1
+        (pense pour le seul cas "taux" partage par presque tout le monde). Une question
+        reformulee de travers ("...taux de chomage... Recensement General de l'Habitat et
+        de la Population (RGPH)...") a matche a EGALITE (score 2) "Taux de chomage..." ET
+        "Population du Maroc...", deux indicateurs totalement sans rapport -- le code a
+        alors choisi silencieusement le premier insere en base au lieu de refuser.
+
+        Premiere version du correctif (refuser TOUTE egalite, sans condition sur le
+        score) trop large : casse "Quel est le taux de chômage actuel ?", qui matche a
+        egalite (score 2, {taux, chomage}) "Taux de chômage selon le Milieu..." ET "Taux
+        de chômage par sexe et region" -- ces deux-la ne sont PAS des sujets sans rapport,
+        seulement deux ventilations du MEME indicateur (meme mots exacts responsables du
+        score : {taux, chomage} pour les deux). Le vrai signal d'un risque reel n'est pas
+        "il y a une egalite", mais "l'egalite repose sur des mots DIFFERENTS selon le
+        candidat" -- {taux, chomage} pour les uns, {population, maroc} pour l'autre dans
+        le cas RGPH. D'ou la regle a deux etages ci-dessous : un score <= 1 partage par
+        plusieurs candidats reste refuse quels que soient les mots (signal trop faible,
+        cas "taux" seul) ; un score > 1 partage n'est refuse que si les candidats a
+        egalite ne partagent pas tous exactement le MEME ensemble de mots correspondants
+        (signe de sujets reellement distincts, pas de simples variantes/ventilations).
         """
         tokens_question = cls._tokeniser(question)
         if not tokens_question:
@@ -342,8 +389,14 @@ class LookupStructure:
             return None
 
         meilleurs_noms = [nom for nom in noms_disponibles if scores[nom] == meilleur_score]
-        if len(meilleurs_noms) > 1 and meilleur_score <= 1:
-            return None  # ambigu : plusieurs indicateurs a egalite sur un seul mot commun
+        if len(meilleurs_noms) > 1:
+            if meilleur_score <= 1:
+                return None  # ambigu : signal trop faible (typiquement "taux" seul en commun)
+            mots_correspondants = {
+                frozenset(tokens_question & cls._tokeniser(nom)) for nom in meilleurs_noms
+            }
+            if len(mots_correspondants) > 1:
+                return None  # ambigu : egalite via des mots differents -> sujets reellement distincts
 
         return meilleurs_noms[0]
 
@@ -353,15 +406,26 @@ class LookupStructure:
         return {t for t in tokens if t not in MOTS_OUTILS}
 
     @classmethod
-    def _resoudre_ventilation(cls, question: str, valeurs_region: list[str]) -> object:
+    def _resoudre_ventilation(
+        cls, question: str, valeurs_region: list[str], ligne_agregee_existe: bool = False,
+    ) -> object:
         """Choisit, parmi les combinaisons de labels reellement presentes dans
         `valeurs_region` (chaines brutes "label1, label2, ..."), celle qui correspond
         le mieux a ce que la question demande explicitement. Voir le docstring de
         module (section "Ventilation") pour l'algorithme complet.
 
+        `ligne_agregee_existe` (ajoute le 31/08, bug reel voir JOURNAL.md) : signale
+        qu'une ligne agregee nationale (region IS NULL) existe AUSSI pour cet
+        indicateur, en plus des lignes ventilees de `valeurs_region`. Quand aucune
+        dimension n'est demandee (`requis` vide), cette ligne agregee est alors ajoutee
+        comme candidate a part entiere avec 0 label en trop -- elle gagne donc toujours
+        face aux combinaisons ventilees (qui ont forcement au moins 1 label), sans
+        introduire de nouvelle ambiguite possible.
+
         Retourne soit une valeur de `valeurs_region` telle quelle (a utiliser dans la
-        clause `region IS ?`), soit la sentinelle `_AUCUNE_VENTILATION_FIABLE` si rien
-        ne peut etre choisi sans risquer un sous-groupe errone.
+        clause `region IS ?`), soit `None` si c'est la ligne agregee qui l'emporte, soit
+        la sentinelle `_AUCUNE_VENTILATION_FIABLE` si rien ne peut etre choisi sans
+        risquer un sous-groupe errone.
         """
         tous_labels = {label.strip() for valeur in valeurs_region for label in valeur.split(",")}
         # Label reel (tel que stocke en base) indexe par sa forme normalisee -- les
@@ -393,7 +457,7 @@ class LookupStructure:
             if label_normalise and re.search(rf"\b{re.escape(label_normalise)}\b", signal):
                 requis.add(label)
 
-        candidats: list[tuple[int, int, str]] = []
+        candidats: list[tuple[int, int, object]] = []
         for valeur in valeurs_region:
             labels = {label.strip() for label in valeur.split(",")}
             if not requis <= labels:
@@ -405,10 +469,16 @@ class LookupStructure:
             }
             candidats.append((len(extra_non_agregat), len(extra), valeur))
 
+        if not requis and ligne_agregee_existe:
+            # 0 label en trop par construction : ne peut jamais etre battue par une
+            # combinaison ventilee (qui a toujours >= 1 label), donc jamais de risque
+            # d'egalite introduit ici -- voir docstring de la methode.
+            candidats.append((0, 0, None))
+
         if not candidats:
             return _AUCUNE_VENTILATION_FIABLE
 
-        candidats.sort()
+        candidats.sort(key=lambda c: (c[0], c[1]))
         if len(candidats) > 1 and candidats[0][:2] == candidats[1][:2]:
             return _AUCUNE_VENTILATION_FIABLE  # ambigu : plusieurs combinaisons aussi precises
 

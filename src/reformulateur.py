@@ -45,7 +45,48 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+from .routeur import Routeur, TypeQuestion
+
 TypeFonctionReformulation = Callable[[str, str], str]  # (question, historique_texte) -> question reformulee
+
+# Instance sans fonction_classification_llm : le filtre ci-dessous ne doit jamais
+# declencher d'appel reseau, seulement la couche heuristique deterministe (voir
+# Routeur.classifier -- sans fonction LLM injectee, le repli en dernier recours est
+# simplement ignore, comportement documente dans src/routeur.py).
+_ROUTEUR_FILTRAGE = Routeur()
+
+
+def _filtrer_salutations(entrees_historique: list[dict]) -> list[dict]:
+    """Ecarte les echanges dont la question a ete classee SALUTATION avant de
+    construire le contexte envoye au LLM de reformulation.
+
+    Corrige le 30/08 (bug reel observe en conditions reelles, voir JOURNAL.md) : le
+    message d'accueil canned (MESSAGE_ACCUEIL, voir scripts/poser_question.py) cite en
+    exemple des mots comme "taux de chomage" et "population" ("posez-moi une question
+    sur... ex. taux de chomage, population..."). Une session qui commence par "hello"
+    stocke cet echange dans l'historique (HistoriqueConversation.ajouter enregistre TOUT,
+    salutations comprises -- necessaire pour l'affichage fidele dans l'interface, voir
+    src/interface.py). Sans ce filtre, la toute PREMIERE vraie question de la session
+    (ex. "c quoi rghp") se voit reformulee avec cet echange "hello" comme "historique" --
+    et le LLM de reformulation, invite a remplacer les sujets sous-entendus par ce qu'ils
+    designent "dans l'historique", a pris les exemples du message d'accueil au pied de la
+    lettre et fabrique une question totalement hors-sujet (taux de chomage au lieu d'une
+    simple definition du RGPH). Une salutation ne porte aucun contenu conversationnel
+    reel : l'exclure ici revient a la traiter comme si elle n'existait pas pour cet usage
+    precis -- toujours visible dans Redis/l'interface, juste jamais montree au LLM de
+    reformulation.
+
+    Reutilise `Routeur.classifier` plutot qu'un simple test sur le texte (ex.
+    PATTERN_SALUTATION seul) : une question comme "Bonjour, quel est le taux de
+    chomage ?" contient bien "bonjour", mais `classifier` la classe CHIFFRE (le signal
+    chiffre l'emporte, voir docstring de Routeur) -- un test naif sur le texte l'aurait
+    a tort exclue du contexte alors qu'elle porte un vrai contenu utile a une
+    reformulation future.
+    """
+    return [
+        entree for entree in entrees_historique
+        if _ROUTEUR_FILTRAGE.classifier(entree["question"]) != TypeQuestion.SALUTATION
+    ]
 
 
 def _formater_historique(entrees_historique: list[dict], max_echanges: int = 3) -> str:
@@ -71,8 +112,13 @@ def reformuler_si_necessaire(
 
     Ne reformule QUE si les deux conditions sont reunies (voir docstring de module,
     section "Decision retenue") :
-    - un historique existe deja pour cette session (sinon rien a reformuler a partir
-      de -- c'est la premiere question, aucun cout ajoute) ;
+    - un historique REEL existe deja pour cette session, une fois les salutations
+      ecartees (voir `_filtrer_salutations`, ajoute le 30/08) -- une session qui n'a
+      encore echange que des politesses ("hello") est traitee comme si elle n'avait
+      aucun historique : rien d'utile a reformuler a partir de, et surtout, le message
+      d'accueil canned contient des mots ("taux de chomage", "population") qui peuvent
+      induire le LLM de reformulation en erreur (voir docstring de `_filtrer_salutations`
+      pour le cas reel concerne) ;
     - une fonction de reformulation est injectee (comportement par defaut inchange si
       absente, meme patron que cache/historique/classification LLM ailleurs).
 
@@ -84,10 +130,11 @@ def reformuler_si_necessaire(
     cle API absente, etc.) ou une reponse vide fait retomber sur la question originale,
     jamais d'echec de tout le pipeline pour ce module optionnel.
     """
-    if not entrees_historique or fonction_reformulation is None:
+    entrees_reelles = _filtrer_salutations(entrees_historique)
+    if not entrees_reelles or fonction_reformulation is None:
         return question
 
-    historique_texte = _formater_historique(entrees_historique)
+    historique_texte = _formater_historique(entrees_reelles)
     try:
         reformulee = fonction_reformulation(question, historique_texte)
     except Exception:
