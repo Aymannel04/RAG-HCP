@@ -1570,3 +1570,20 @@ police en lisant les glyphes visuellement. Decision prise de ne PAS l'implemente
 maintenant (nouvelle dependance systeme, gain incertain sur un document dense
 bilingue avec tableaux entremeles, cas isole en fin de stage) -- documentee comme
 limite connue avec piste de solution (`src/extracteur.py`, `TODO.md`).
+
+## 3 septembre 2026 (suite) -- verification de fraicheur README.md / ADR
+
+Passage en revue de `README.md` et `docs/adr/` (item backlog). Trouve et corrige :
+README.md decrivait encore un projet en binome (Ayman + Saad), pointait vers
+`conception_uml_v3.pdf` (perime depuis le 1er septembre, v4 existe), listait seulement
+les 9 modules numerotes de la conception d'origine en omettant les 5 modules ajoutes en
+cours de route (`base_donnees.py`, `bds_client.py`, `llm_mistral.py`, `cache_redis.py`,
+`reformulateur.py`), et sa section "Statut d'avancement" etait figee au Sprint 3 (aucune
+mention du jeu de test de fiabilite ni du resultat NF2). Tout corrige. ADR 0002 avait un
+statut incoherent avec son propre contenu -- "propose -- a confirmer" alors que le texte
+indiquait deja "tranche le 21 juillet" pour le choix du LLM -- corrige en "accepte".
+
+Effet de bord trouve en verifiant : `docs/conception_uml_v4.tex/.pdf` et les 8 scripts
+source des diagrammes (`docs/images_src/`) existaient deja dans le repertoire de travail
+depuis une tache anterieure de cette session mais n'avaient jamais ete commites --
+ajoutes au depot dans la foulee.
