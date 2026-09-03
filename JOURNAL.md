@@ -1239,3 +1239,210 @@ la ligne agregee, pourtant juste a cote et sans aucune ambiguite possible.
   13.0% (2025, region=None, I4001) au lieu de None.
 
 A faire valider par Ayman en conditions reelles dans Streamlit.
+
+## 31 aout 2026 (suite 2) — dossier de conception mis a jour (v4), en attendant le rapport
+
+Bug fixing mis en pause (repris plus tard selon les tests d'Ayman) pour corriger les
+schemas/diagrammes/architecture, demande de l'encadrante relayee par Ayman : "beaucoup
+de choses ont change de la premiere archi et diagrammes". Audit complet des ecarts
+entre `conception_uml_v3.pdf` (15 juillet) et l'etat reel du code six semaines plus
+tard : nouveau module Reformulateur (23/08), cache Redis + historique (28/07), 3e
+chemin MIXTE avec dispatch parallele (28/07), remplacement de facto de l'extraction de
+tableaux par l'API BDS (ADR 0004) — avec une decouverte importante en creusant : le
+repli "a la demande" vers l'API decrit dans `complement_conception_bds.pdf` (cascade a
+3 niveaux dans LookupStructure) n'a jamais ete implemente (`bds_client` n'est importe
+nulle part dans `lookup_structure.py`) ; seul le pre-remplissage nocturne l'est
+reellement. De meme, `ConstructeurIndicateurs.structurer(tableaux)` reste
+`NotImplementedError`, deja note comme hors perimetre dans TODO.md.
+
+Les 7 diagrammes de v3 (cas d'utilisation, MCD, MLD, classes, 2 sequences, activite)
+regeneres a l'identique dans leur contenu inchange et mis a jour la ou ca a bouge, plus
+un 8e diagramme nouveau (sequence MIXTE). Outils reseau habituels (PlantUML, Mermaid/
+puppeteer) bloques dans le bac a sable (pas d'acces a storage.googleapis.com) -> diagrammes
+redessines en SVG (script Python maison, `docs/images_src/`, reutilisable pour les
+prochaines revisions) puis rendus en PNG via cairosvg, dans le meme style visuel que
+les originaux. Diagramme d'activite restructure en deux colonnes independantes
+(pipeline documentaire vs pipeline BDS planifie) plutot qu'un faux fork/join comme en
+v3, pour refleter la realite : ce sont deux processus a declencheurs distincts. Nouvelle
+section "Ecarts assumes entre conception et implementation reelle" ajoutee au document
+pour tracer explicitement les deux non-implementations ci-dessus plutot que de les
+laisser disparaitre silencieusement des schemas.
+
+`docs/conception_uml_v4.tex/pdf` compile sans erreur (pdflatex, 10 pages), verifie page
+par page. `architecture.png` (utilise aussi par `fiche_cadrage_v4.tex` et
+`rapport_stage.tex`) mis a jour de la meme facon (memoire conversationnelle en encadre,
+2 sources d'ingestion independantes) — la prose "neuf modules" de ces deux documents
+n'a pas ete retouchee (hors perimetre de cette tache, sera reprise avec le rapport de
+stage). `conception_uml_v3.pdf/tex` conserves tels quels (archive historique, cite
+par son nom a plusieurs endroits de ce journal).
+
+Suite (meme jour) : Ayman a demande si `architecture.png` (vue d'ensemble partagee
+avec `fiche_cadrage_v4.tex`/`rapport_stage.tex`) devait aussi rejoindre le document —
+ajoutee comme nouvelle section 2 ("Vue d'ensemble de l'architecture"), avant les 8
+diagrammes UML/Merise. A cette occasion, toute la numerotation des figures/sections du
+document est passee de texte code en dur ("Figure 5", "section~9"...) a de vrais
+`\label`/`\ref` LaTeX (`\refstepcounter{figure}` dans la macro `\diagfig`) : la
+premiere version avait plusieurs decalages d'un cran (num de figure incoherents entre
+legende et renvois textuels), corriges a la main puis rendus impossibles a l'avenir
+par ce changement -- toute insertion/suppression de figure se renumerote seule desormais.
+Recompile (3 passes pdflatex) : 11 pages, aucune reference indefinie.
+
+## 1 septembre 2026 -- rapport de stage mis a jour, inspiration d'un rapport similaire
+
+Ayman a transmis le rapport de stage d'un ami (projet RAG similaire, autre entreprise)
+et demande de s'en inspirer pour mettre a jour `docs/rapport_stage.tex` (29 pages,
+non retouche depuis mi-aout, donc en retard sur l'etat reel du projet). Les deux
+rapports lus integralement avant toute modification. Demande finale d'Ayman apres
+question de cadrage : tout prendre (etat de l'art, tableaux competences/risques,
+annexes techniques), plus mettre a jour l'archi/diagrammes dans le rapport lui-meme
+et upgrader le liant des sprints (pas seulement narratif).
+
+Travail effectue sur une copie de travail (`outputs/rapport_build/`), jamais directement
+sur `docs/`, recompile a chaque etape :
+
+- **Numerotation figures/sections** : `\diagfig` du rapport de stage (different de celui
+  de `conception_uml_v4.tex`) passe de 2 a 3 arguments (`fichier, legende, label`) avec
+  `\label` apres `\caption` (le package `caption` gere deja `\refstepcounter`, pas besoin
+  de le faire a la main comme dans v4). Tous les renvois "figure 6 et 7", "section 3.2",
+  "section~8.4" convertis en `\ref`. Plusieurs renvois caches profondement dans le texte
+  (ex. "voir section 8" dans Sprint 1, qui pointait en fait vers "Elargissement du
+  routeur" bien plus loin) auraient silencieusement pointe vers la mauvaise section une
+  fois la nouvelle section Etat de l'art inseree devant -- corriges avec le meme systeme
+  de label. Lecon retenue : sur un document de cette taille, tout renvoi textuel en dur
+  finit par driver, `\ref` partout des le debut aurait evite plusieurs allers-retours.
+- **Fiche signaletique** ajoutee juste apres la page de titre.
+- **Section "Etat de l'art"** ajoutee en Partie II avant "Choix technologiques" : RAG
+  (Lewis et al. 2020), embeddings/BGE-M3, BM25 (Robertson & Zaragoza), reranking
+  cross-encoder -- citations reelles, bibliographie convertie de simple liste a puces en
+  `thebibliography` numerotee (12 entrees, 5 academiques + 7 institutionnelles/techniques).
+- **Diagramme MIXTE** (`uml_seq_mixte.png`, deja genere pour `conception_uml_v4.tex` mais
+  absent du rapport de stage) insere dans la section "Question mixte" du Sprint 3.
+- **Sprint 4 complete** : 3 bugs reels du 30/08, absents du rapport bien que deja dans
+  TODO.md/JOURNAL.md -- salutation qui contamine la reformulation (Bug 1), egalite a 2+
+  mots tranchee silencieusement par LookupStructure (Bug 2), question deja autonome
+  quand meme enrichie par l'historique (Bug 3) -- avec extraits de code reels (pas de
+  pseudo-code) tires directement de `src/reformulateur.py` et `src/lookup_structure.py`.
+- **Sprint 5 redige** (etait un placeholder vide) : flux "Dernieres parutions" (30/08),
+  Bug 4 ventilation/agregat (31/08, avec extrait de code), mise a jour du dossier de
+  conception v4 -- honnete sur ce qui reste (jeu de test de fiabilite, demo finale, voir
+  point suivant).
+- **"Fiabilite mesuree" reformulee sans rien inventer** : le jeu de test de 30-50
+  questions n'a toujours pas ete execute (reconfirme par grep avant toute redaction,
+  aucun fichier de resultats dans le repo) -- section explicite sur ce qui EST deja
+  mesure (211 tests unitaires, tableau de validations reelles) versus ce qui NE L'EST
+  PAS encore (le chiffre NF2 lui-meme), plutot que de laisser un chiffre invente ou de
+  garder un simple placeholder vide.
+- **Partie V** : tableau "Competences acquises" (transforme le texte existant en tableau)
+  + nouvelle section "Risques du projet et reponses apportees" (6 risques reels, chacun
+  avec sa reponse de conception effective).
+- **Conclusion** : tableau "objectif initial vs bilan" confrontant chaque objectif du
+  cadrage (section 3, cadrage) a son etat reel -- le jeu de test de fiabilite y apparait
+  explicitement comme "non atteint a ce stade".
+- **Annexes techniques** ajoutees (`\appendix`, nouvelle Partie VI) : variables de
+  configuration (`.env`, Redis), commandes de maintenance/test reelles (installees et
+  executees a plusieurs reprises ce stage, extraites de JOURNAL.md/README.md, pas
+  inventees), et un tableau de 10 scenarios de recette utilisateur bases sur des
+  questions reellement posees au systeme et documentees plus haut dans le rapport.
+
+**Point volontairement NON fait, signale a Ayman** : captures d'ecran reelles de
+l'interface Streamlit. Verifie que le bac a sable n'a ni acces reseau vers
+`api.mistral.ai`/`hcp.ma` (curl -> exit 56) ni serveur Redis installe -- impossible de
+lancer l'app en conditions reelles ici pour prendre une vraie capture. Pas de mockup
+fabrique a la place (irait a l'encontre du principe du projet) : ce point reste ouvert,
+a faire par Ayman lui-meme (lancer `streamlit run src/interface.py` en local, envoyer
+2-3 captures des trois chemins CHIFFRE/NOTION/MIXTE) une fois qu'il aura l'occasion de
+les prendre.
+
+Recompile final (3 passes pdflatex) : 36 pages (contre 29 avant), aucune reference
+indefinie, aucun label duplique -- verifie visuellement page par page sur les sections
+ajoutees/modifiees (fiche signaletique, Etat de l'art avec citations cliquables,
+diagramme MIXTE en Figure 9, les 2 extraits de code du Sprint 4, Sprint 5, tableaux
+Competences/Risques/Bilan, les 3 annexes). `docs/rapport_stage.tex` et
+`docs/rapport_stage.pdf` mis a jour dans le depot.
+
+## 2 septembre 2026 -- retouches suite aux retours d'Ayman sur le rapport
+
+Deux retours apres relecture du rapport mis a jour la veille : (1) 3 passages
+mentionnaient explicitement "Ayman" a la 3e personne ("mene avec Ayman dans
+l'interface", "revalide ... avec Ayman", "Ayman a signale que...") alors que le rapport
+est ecrit a la 1re personne du point de vue d'Ayman lui-meme -- consigne deja donnee
+avant et non respectee ici, corrigee (reformulation impersonnelle, sans rien changer au
+contenu factuel). (2) demande d'ajouter, pour chaque partie/sous-partie de la
+conception et de la realisation, l'emplacement exact du fichier concerne dans le depot,
+en plus des extraits de code deja presents.
+
+Ajouts :
+- Macro `\fichier{...}` (style italique gris, sous le titre de sous-section) appliquee
+  a 23 sous-sections de la Partie II (conception) et III (sprints) -- chemin(s) reel(s)
+  depuis la racine du depot pour chacune (`src/scraper.py`, `db/schema.sql`,
+  `src/lookup_structure.py`, etc.), verifies un par un contre le contenu reel de `src/`
+  et `scripts/` (pas devines).
+- Colonne "Fichier" ajoutee au tableau des 9 modules (section Architecture retenue) --
+  meme verification.
+- 3 nouveaux extraits de code reels (aucun n'existait avant sur ces points precis) :
+  `Routeur.classifier` (ordre de decision complet, `src/routeur.py`), `CacheReponses`
+  + constante TTL (`src/cache_redis.py`), generation de `id_session` via
+  `st.session_state` (`src/interface.py`).
+- Bug de mise en page trouve en verifiant visuellement le nouveau tableau a 4 colonnes :
+  le chemin `src/constructeur_indicateurs.py` (32 caracteres, aucun point de coupure
+  naturel en police `texttt`) debordait de sa colonne (4.5cm) sans avertissement
+  bloquant mais avec un rendu casse. Corrige avec le package `seqsplit` (nouvelle macro
+  `\fichc`, autorise la coupure caractere par caractere dans cette colonne
+  specifiquement) plutot que de simplement elargir la colonne, qui n'aurait pas
+  garanti l'absence de recidive avec un chemin encore plus long plus tard.
+
+Recompile (3 passes) : 38 pages, aucune reference indefinie, aucun overfull hbox sur le
+tableau corrige -- verifie visuellement (tableau des 9 modules, section Routeur avec son
+nouvel extrait de code, Cache Redis, Interface). `docs/rapport_stage.tex` et
+`docs/rapport_stage.pdf` mis a jour.
+
+## 3 septembre 2026 -- retest reel post-Bug4, 5e bug reel : question courte confondue avec une reference implicite
+
+Retour au projet apres la parenthese rapport. Retest en conditions reelles dans
+Streamlit, dans l'ordre convenu :
+- Bug 4 (ventilation) : `taux de chomage` -> 13,0%, `donne taux de chomage au maroc` ->
+  13,0%, `taux de chomage en milieu urbain` -> 16,4% (Urbain), `taux de chomage des
+  femmes` -> 20,5% (Feminin). Les 4 corrects -- Bug 4 confirme fonctionnel.
+- Enchaine avec `hello` puis `c quoi rghp` (le meme cas que le Bug 1 du 30/08) : la
+  reponse est FAUSSE -- reprend "Taux de chomage ... 20,5% ... Feminin" (la reponse a
+  la question precedente) au lieu d'expliquer le RGPH.
+
+**Diagnostic** (lecture du code, pas de suppositions) : Bug 1 (30/08) est bien corrige
+-- `_filtrer_salutations` exclut correctement le "hello" de l'historique envoye au LLM
+de reformulation. Le probleme est ailleurs : avant "c quoi rghp", l'historique reel
+(hors salutations) contenait 3 questions consecutives sur le chomage (les 3 derniers
+echanges, `_formater_historique(..., max_echanges=3)`). "rghp" est une faute de frappe
+que le modele de reformulation ne reconnait pas -- au lieu de traiter cette question
+comme deja autonome (Cas 2 du prompt, meme si le sujet lui semble flou), il a confondu
+"je ne comprends pas bien ce mot" avec "cette question fait reference a l'historique"
+(Cas 1), et l'a reliee au chomage feminin qui saturait le contexte recent.
+Consequence en cascade observee : la reponse fausse a "c quoi rghp" (20,5% Feminin)
+reste dans l'historique et pollue potentiellement la reformulation de la question
+suivante si elle porte aussi sur le chomage (teste plus loin avec des questions
+differentes de celles prevues, voir plus bas -- pas reproduit a l'identique mais le
+mecanisme de cascade est reel et documente ici).
+
+**Correction** (`src/llm_mistral.py::PROMPT_SYSTEME_REFORMULATION`, regle Bug 5) :
+ajout d'un paragraphe explicite -- une question courte, mal orthographiee ou abregee
+n'est PAS en soi une reference implicite au sens du Cas 1 ; seule la presence d'un mot
+de reference explicite ("ca", "ce chiffre", "cette periode"...) justifie d'aller
+chercher dans l'historique. Exemple concret inclus dans le prompt (rghp/chomage),
+meme methode que pour la regle Bug 3 (23/08). 1 nouveau test dans
+`tests/test_llm_mistral.py`, qui verifie la presence de la regle dans le prompt (la
+qualite reelle de la reformulation reste, comme pour Bug 3, verifiable seulement en
+conditions reelles). Suite complete : 212/212.
+
+**Retest reel apres correction** : sequence `hello` / `taux de chomage` / `taux de
+chomage pour les femmes` / `hello` / `c quoi rghp` -> cette fois, reponse correcte et
+sourcee sur le RGPH (Recensement General de la Population et de l'Habitat, RGPH 2024)
+-- Bug 5 corrige, valide en conditions reelles. Suite du retest avec des questions
+NOTION variees (causes du chomage, "Maroc 2030", note de conjoncture, chiffres cles
+2026, comptes regionaux, "echange des stock") : toutes correctement sourcees, et le
+systeme refuse honnetement quand le contexte ne contient pas la reponse (ex. "non mais
+pourquoi on a ces problemes ?", "echange des stock" -> refus explicite plutot
+qu'invention). Point mineur note, pas un bug bloquant : la question hors-sujet "un bon
+citoyen c'est quoi ?" a recu une reponse etiree a partir d'un document sans rapport
+direct plutot qu'un refus net -- a surveiller, pas traite dans l'immediat.
+
+Commit local a faire (regroupe le correctif Bug 5 + le test) -- push GitHub toujours a
+faire par Ayman lui-meme.

@@ -99,6 +99,16 @@ PROMPT_SYSTEME_REFORMULATION = (
     "EXACTEMENT telle quelle, sans y ajouter aucun mot, aucun sujet, aucune annee "
     "venant de l'historique. Un changement de sujet n'est PAS une raison de "
     "reformuler.\n\n"
+    "Important -- une question courte, mal orthographiee, tapee avec des fautes ou "
+    "abregee (ex. 'c quoi rghp') N'EST PAS en soi une reference implicite au sens du "
+    "Cas 1. Ne comble jamais un manque de clarte d'ECRITURE en piochant un sujet dans "
+    "l'historique : seule la presence d'un mot de reference explicite ('ça', 'ce "
+    "chiffre', 'cette periode'...) justifie d'aller chercher dans l'historique. Si tu "
+    "ne trouves aucun mot de ce type, traite la question comme le Cas 2, meme si son "
+    "sujet reste flou ou mal ecrit pour toi -- renvoie-la telle quelle plutot que de "
+    "deviner. Exemple : historique sur le chomage, puis question de suivi 'c quoi "
+    "rghp' -> aucune reference implicite -> renvoyer 'c quoi rghp' inchangee, jamais la "
+    "relier au chomage.\n\n"
     "Ne reponds JAMAIS a la question, ne devine jamais une information absente de la "
     "question et de l'historique. Reponds UNIQUEMENT par la question (reformulee ou "
     "inchangee), en francais, sans aucun commentaire ni guillemets."
@@ -126,6 +136,19 @@ def reformuler_question(question: str, historique_texte: str) -> str:
     distingue desormais explicitement deux cas (reference vague a resoudre vs question
     deja autonome meme si elle change de sujet) avec un exemple concret de ce dernier
     cas, plutot qu'une regle generale ambigue.
+
+    Regle Bug 5 ajoutee le 3/09 (bug reel observe en conditions reelles, voir
+    JOURNAL.md) : "hello" puis "c quoi rghp" apres 3 questions consecutives sur
+    le chomage a produit une reformulation qui relie a tort "rghp" au chomage feminin
+    (mauvaise reponse : 20,5% au lieu d'une explication du RGPH). Cause : le modele a
+    traite le fait de ne pas reconnaitre "rghp" (faute de frappe) comme une raison de
+    puiser dans l'historique, alors qu'aucun mot de reference implicite (Cas 1) n'etait
+    present -- une confusion entre "je ne comprends pas bien cette question" et "cette
+    question fait reference a l'historique", jamais distinguee explicitement dans la
+    version precedente du prompt. Le prompt precise desormais qu'une question courte,
+    mal orthographiee ou abregee n'est PAS en soi une reference implicite : seule la
+    presence d'un mot de reference explicite justifie d'aller chercher dans
+    l'historique, avec l'exemple reel (rghp/chomage) inclus directement dans le prompt.
 
     À injecter tel quel : `poser_question(..., fonction_reformulation=reformuler_question)`.
     """

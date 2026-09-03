@@ -114,3 +114,21 @@ def test_prompt_reformulation_interdit_explicitement_le_changement_de_sujet():
     assert "change" in PROMPT_SYSTEME_REFORMULATION.lower()
     assert "exactement telle quelle" in PROMPT_SYSTEME_REFORMULATION.lower()
     assert "n'est pas une raison de" in PROMPT_SYSTEME_REFORMULATION.lower()
+
+
+# --- Regression reelle du 03/09 : question courte/mal ecrite a tort traitee comme une
+# reference implicite -------------------------------------------------------------
+#
+# Bug observe en conditions reelles (voir JOURNAL.md) : "hello" puis "c quoi rghp"
+# apres 3 questions consecutives sur le chomage a produit une reformulation qui relie
+# a tort "rghp" au chomage feminin (mauvaise reponse : 20,5% au lieu d'une explication
+# du RGPH). Comme pour le test ci-dessus, la qualite reelle de la reformulation ne peut
+# se verifier qu'en conditions reelles (vrai appel Mistral) -- ce test verifie
+# seulement que le prompt contient bien la regle explicite distinguant "je ne
+# comprends pas cette question" de "cette question fait reference a l'historique".
+
+def test_prompt_reformulation_ne_confond_pas_question_mal_ecrite_et_reference_implicite():
+    prompt = PROMPT_SYSTEME_REFORMULATION.lower()
+    assert "mal orthographiee" in prompt
+    assert "n'est pas en soi une reference implicite" in prompt
+    assert "rghp" in prompt
