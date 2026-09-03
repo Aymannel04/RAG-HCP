@@ -26,6 +26,22 @@
 
 \newcommand{\tblhead}[1]{\textcolor{white}{\textbf{#1}}}
 
+% Encadre de mise a jour (ajoute le 03/09/2026) : ce document est la fiche de
+% cadrage d'origine (redigee le 7 juillet 2026), volontairement conservee telle
+% quelle -- chaque encadre \majcadrage signale, a l'endroit concerne, ce qui a
+% reellement change depuis et pourquoi, sans reecrire le plan initial.
+\newcommand{\majcadrage}[1]{%
+\par\vspace{0.35cm}
+\noindent\colorbox{lightgrey}{%
+\begin{minipage}{\dimexpr\linewidth-2\fboxsep}
+\vspace{0.15cm}
+\textbf{\color{gold}Mise \`a jour (03/09/2026) :} #1
+\vspace{0.15cm}
+\end{minipage}%
+}
+\vspace{0.35cm}
+}
+
 \begin{document}
 
 \begin{titlepage}
@@ -64,6 +80,8 @@ Ce projet s'inscrit dans le cadre d'un stage men\'e au sein de la Direction des 
 \item Livrable attendu~: un prototype fonctionnel document\'e, accompagn\'e d'une \'evaluation de fiabilit\'e.
 \end{itemize}
 
+\majcadrage{Le projet a finalement \'et\'e men\'e en solo par Ayman El Baida, et non en bin\^ome comme pr\'evu \`a la page de titre de ce document (r\'edig\'ee le 7 juillet, refl\'etant la situation de d\'epart). Voir le rapport de stage pour le d\'etail.}
+
 \subsection{Hors p\'erim\`etre pour cette premi\`ere it\'eration}
 \begin{itemize}
 \item Crawl exhaustif de l'int\'egralit\'e du site hcp.ma.
@@ -101,6 +119,8 @@ Monter en comp\'etence sur une cha\^ine compl\`ete de traitement du langage natu
 \item Livrer une interface de d\'emonstration simple permettant d'\'evaluer le prototype.
 \end{itemize}
 
+\majcadrage{Jeu de test de fiabilit\'e construit et ex\'ecut\'e le 3 septembre (30 questions, borne basse de la fourchette pr\'evue) -- voir \texttt{scripts/mesurer\_fiabilite.py}. R\'esultat~: 28/30 (93,3~\%), objectif NF2 atteint. Sa construction a elle-m\^eme r\'ev\'el\'e 2 bugs r\'eels dans le syst\`eme, corrig\'es avant la mesure finale.}
+
 \section{Besoins fonctionnels et non fonctionnels}
 \subsection{Besoins fonctionnels}
 \begin{longtable}{@{}p{1.5cm}p{13.5cm}@{}}
@@ -129,6 +149,8 @@ NF4 & S\'ecurit\'e~: aucune donn\'ee personnelle trait\'ee~; conformit\'e avec l
 NF5 & Maintenabilit\'e~: code document\'e et modulaire, permettant l'ajout de nouvelles cat\'egories de contenu sans r\'ee\'ecriture compl\`ete. \\
 \end{longtable}
 
+\majcadrage{NF2 mesur\'e et atteint le 3 septembre~: 93,3~\% (28/30) sur le jeu de test r\'eel, via \texttt{scripts/mesurer\_fiabilite.py} -- calcul 100~\% d\'eterministe et hors ligne (aucun appel LLM sur le chemin question chiffr\'ee), v\'erit\'e terrain \'etablie ind\'ependamment par requ\^ete SQL directe sur la base, jamais en r\'eutilisant le module test\'e comme sa propre r\'ef\'erence.}
+
 \section{M\'ethodes et d\'emarche}
 \subsection{D\'emarche de gestion de projet}
 Fonctionnement en sprints hebdomadaires avec revue de fin de semaine, r\'epartition des r\^oles au sein du bin\^ome par lot fonctionnel, et point r\'egulier pour arbitrer les points ouverts au fur et \`a mesure de l'avancement.
@@ -136,6 +158,7 @@ Fonctionnement en sprints hebdomadaires avec revue de fin de semaine, r\'epartit
 \subsection{M\'ethodes techniques envisag\'ees}
 \begin{itemize}
 \item Extraction de contenu~: scraping structur\'e dans le respect du robots.txt, parsing HTML, extraction de texte et de tableaux PDF, OCR en secours pour les documents scann\'es.
+\majcadrage{L'OCR pr\'evu en secours n'a finalement pas \'et\'e impl\'ement\'e (cas r\'eel isol\'e, co\^ut/risque jug\'es trop \'elev\'es en fin de stage pour une nouvelle d\'ependance syst\`eme). \`A la place~: un garde-fou heuristique (\texttt{src/extracteur.py}, \texttt{\_texte\_lisible}) d\'etecte et exclut du texte visiblement illisible (police mal mapp\'ee) avant chunking, plut\^ot que de le corriger. Un cas r\'eel de pollution d\'ej\`a index\'ee (document \#75) a motiv\'e ce correctif, ajout\'e le 3 septembre. L'OCR reste une piste document\'ee pour un usage futur si ce cas devient fr\'equent.}
 \item Traitement du langage~: d\'ecoupage (chunking) respectant la structure des documents, embeddings multilingues capables de traiter le fran\c{c}ais et extensibles \`a l'arabe.
 \item Recherche~: recherche hybride dense et lexicale, reranking par cross-encoder pour am\'eliorer la pr\'ecision du contexte retourn\'e.
 \item G\'en\'eration~: prompting avec contrainte de grounding strict et citation syst\'ematique de la source.
@@ -166,6 +189,8 @@ L'architecture propos\'ee s\'epare d\`es le d\'epart les deux natures de contenu
 8. G\'en\'erateur & R\'edige la r\'eponse en langage naturel avec citation obligatoire. & Passages ou valeur+source $\rightarrow$ r\'eponse finale \\
 9. Interface & Affiche la question, la r\'eponse et la source cliquable. & R\'eponse finale $\rightarrow$ affichage utilisateur \\
 \end{longtable}
+
+\majcadrage{Module 4 finalement aliment\'e en priorit\'e par l'API de la Base de Donn\'ees Statistiques du HCP (\texttt{bds.hcp.ma}), et non par extraction de tableaux PDF/XLSX comme pr\'evu ici -- source non identifi\'ee au moment de la r\'edaction de cette fiche. D\'ecouverte le 15 juillet en cherchant un acc\`es plus direct aux chiffres officiels~: cette API, non document\'ee publiquement mais librement accessible, s'est av\'er\'ee plus fiable que l'extraction PDF/XLSX pour les indicateurs cur\'es. Voir ADR 0004 (\texttt{docs/adr/0004-api-bds-pour-les-indicateurs.md}). L'extraction PDF/XLSX (module 2) reste utilis\'ee pour le contenu narratif et les documents hors p\'erim\`etre de la BDS.}
 
 \subsection{Mod\`ele de donn\'ees}
 \begin{longtable}{@{}p{3.2cm}p{12cm}@{}}
@@ -200,6 +225,8 @@ LLM de g\'en\'eration & \`A d\'efinir -- point ouvert, voir section 11 \\
 Interface de d\'emonstration & Streamlit \\
 \end{longtable}
 
+\majcadrage{Choix confirm\'es en pratique~: extraction PDF/tableaux par \texttt{pdfplumber} seul (\texttt{extract\_tables} int\'egr\'e suffisant -- PyMuPDF et Camelot, envisag\'es ici, jamais utilis\'es au final). LLM de g\'en\'eration tranch\'e le 21 juillet~: \textbf{Mistral} (\texttt{mistral-small-latest}, API externe, tier gratuit), retenu apr\`es comparaison avec Google Gemini et Groq pour la qualit\'e du fran\c{c}ais. Voir ADR 0002 (\texttt{docs/adr/0002-stack-technique-prototype.md}) pour le d\'etail de la comparaison. Le reste de la stack (BGE-M3, Chroma, rank-bm25, SQLite, Streamlit) confirm\'e sans changement.}
+
 \subsection{Points de robustesse \`a pr\'evoir}
 \begin{itemize}
 \item Si le routeur se trompe de cat\'egorie, pr\'evoir un filet de s\'ecurit\'e~: si le lookup structur\'e ne trouve rien, basculer automatiquement sur le retrieval texte.
@@ -221,6 +248,8 @@ D\'ependance \`a une API LLM externe & Moyen & Moyenne & Clarifier avec l'encadr
 Contenu bilingue FR/AR complexifiant l'indexation & Faible pour le prototype & Faible (AR hors scope V1) & Fran\c{c}ais prioritaire, arabe en extension \\
 \end{longtable}
 
+\majcadrage{Risque «~qualit\'e variable de l'extraction PDF~» concr\'etis\'e~: un document r\'eellement en base (police arabe legacy) produisait des symboles bruts index\'es. Mitigation r\'eelle appliqu\'ee le 3 septembre~: garde-fou de d\'etection/exclusion (voir encadr\'e section~6), et non l'OCR envisag\'e ici -- l'OCR reste une piste document\'ee mais non impl\'ement\'ee.}
+
 \section{Crit\`eres de r\'eussite}
 \begin{itemize}
 \item Le prototype r\'epond correctement, avec source cit\'ee, \`a au moins 80 \`a 90~\% des questions du jeu de test.
@@ -228,6 +257,8 @@ Contenu bilingue FR/AR complexifiant l'indexation & Faible pour le prototype & F
 \item Le code est versionn\'e, document\'e et reproductible par un tiers.
 \item Le rapport de stage et la pr\'esentation finale sont pr\^ets avant la fin du stage.
 \end{itemize}
+
+\majcadrage{Crit\`ere de fiabilit\'e atteint et d\'epass\'e~: 93,3~\% (28/30) mesur\'e le 3 septembre, contre 80 \`a 90~\% vis\'e ici. Code versionn\'e (git, commits locaux) et suite de tests automatis\'ee \`a 224/224 \`a la m\^eme date.}
 
 \section{Hypoth\`eses de travail et points \`a valider}
 Pour ne pas bloquer l'avancement, les hypoth\`eses par d\'efaut suivantes sont retenues d\`es maintenant~; elles seront confirm\'ees ou ajust\'ees lors du prochain point avec l'encadrante.
@@ -242,6 +273,8 @@ Pour ne pas bloquer l'avancement, les hypoth\`eses par d\'efaut suivantes sont r
 \item Validation~: toute r\'eponse portant un chiffre est v\'erifi\'ee manuellement pendant la phase de test.
 \item Port\'ee apr\`es le stage~: prototype fig\'e livr\'e en fin de stage, mise \`a jour continue hors p\'erim\`etre.
 \end{itemize}
+
+\majcadrage{Budget/acc\`es API r\'esolu~: Mistral, tier gratuit, validation encadrante le 21 juillet (voir ADR 0002). Validation manuelle syst\'ematique compl\'et\'ee (non remplac\'ee) par une mesure automatis\'ee~: \texttt{scripts/mesurer\_fiabilite.py}, 30 questions \`a v\'erit\'e terrain ind\'ependante, ex\'ecutable \`a tout moment sans intervention manuelle.}
 
 \section{Planning propos\'e}
 Planning cibl\'e sur 5 semaines (livraison d\'ebut ao\^ut), avec une marge de s\'ecurit\'e jusqu'\`a fin ao\^ut en cas d'al\'ea.
@@ -258,6 +291,8 @@ S4 & 28 juil. -- 3 ao\^ut & Interface de d\'emonstration, constitution du jeu de
 S5 & 4 -- 10 ao\^ut & Finalisation, documentation, pr\'eparation du rapport et de la d\'emonstration finale (cible de fin de projet). \\
 Marge & jusqu'\`a fin ao\^ut & R\'eserve en cas de retard, ou extension (support arabe, am\'elioration interface) si le calendrier le permet. \\
 \end{longtable}
+
+\majcadrage{Calendrier r\'eellement d\'epass\'e~: la marge pr\'evue jusqu'\`a fin ao\^ut n'a pas suffi -- le jeu de test de fiabilit\'e et la finalisation (Sprint 5) n'ont \'et\'e cl\^otur\'es que le 3 septembre. \'Ecart assum\'e~: pas de r\'egression sur le p\'erim\`etre, juste un allongement de la phase de finalisation/mesure.}
 
 \section{Glossaire}
 \begin{longtable}{@{}p{4cm}p{10.2cm}@{}}
