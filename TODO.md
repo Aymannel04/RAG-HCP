@@ -75,8 +75,11 @@ Backlog :
       à chronométrer sur ta machine sans cette contrainte ; le fichier de 14 Mo pas
       encore testé. Nettoyé 14 fichiers invalides dans `data/raw/` (antérieurs au fix
       `_contenu_semble_valide` du 15/07, confirmés stale par horodatage git).
-- [ ] `_extraire_xlsx` toujours pas testé en réel : aucun vrai .xlsx dans le jeu de
-      données actuel (aucun exemplaire trouvé sur les pages seed à ce jour).
+- [x] `_extraire_xlsx` validé en réel le 03/09 sur `data/raw/248688.xlsx` (données
+      trimestrielles chômage/emploi, 3 feuilles) : 3 tableaux extraits proprement
+      (données, dictionnaire des codes, note méthodologique), aucune erreur. Note
+      précédente ("aucun xlsx dans le corpus") périmée -- ce fichier existait déjà
+      dans `data/raw/`, juste jamais testé jusqu'ici.
 - [x] Support DOCX ajouté (ADR 0005, décision prise avec Ayman le 17/07 : étendre plutôt
       qu'accepter le trou) : `Scraper` détecte/télécharge/valide les `.docx` (même
       schéma que PDF/XLSX, `/attachment/{id}/` sans extension visible dans le href) ;

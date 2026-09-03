@@ -1587,3 +1587,12 @@ Effet de bord trouve en verifiant : `docs/conception_uml_v4.tex/.pdf` et les 8 s
 source des diagrammes (`docs/images_src/`) existaient deja dans le repertoire de travail
 depuis une tache anterieure de cette session mais n'avaient jamais ete commites --
 ajoutes au depot dans la foulee.
+
+## 3 septembre 2026 (suite) -- _extraire_xlsx enfin valide en reel
+
+TODO.md notait `_extraire_xlsx` jamais teste en conditions reelles, faute de vrai
+fichier .xlsx dans le corpus. Verification : `data/raw/248688.xlsx` existait deja
+(donnees trimestrielles chomage/emploi), juste jamais utilise pour ce test. Extraction
+lancee dessus : 3 tableaux proprement extraits (donnees chiffrees 2017+, dictionnaire
+des codes de colonnes, note methodologique sur les arrondis), aucune erreur. Note
+TODO.md corrigee.
