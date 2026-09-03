@@ -349,13 +349,17 @@ mis à jour après la création du venv d'Ayman -> `redis` absent du venv ->
 **Objectif :** disposer d'un prototype démontrable et mesuré.
 
 Backlog :
-- [ ] Interface Streamlit (`src/interface.py`)
-- [ ] Jeu de test de 30-50 questions-réponses
-- [ ] Mesure de fiabilité (faithfulness, exactitude factuelle, pertinence du contexte)
-- [ ] Itération sur les points faibles identifiés
+- [x] Interface Streamlit (`src/interface.py`), validée en conditions réelles.
+- [x] Jeu de test de 30 questions-réponses (`scripts/mesurer_fiabilite.py`), construit
+      et exécuté le 3 septembre.
+- [x] Mesure de fiabilité (exactitude factuelle sur les questions chiffrées) : 93,3~%
+      (28/30), objectif NF2 atteint. Voir JOURNAL.md 03/09.
+- [x] Itération sur les points faibles identifiés (bugs trouvés en construisant le jeu
+      de test, corrigés avant la mesure finale).
 
 **Definition of done :** démonstration de bout en bout fonctionnelle + rapport de fiabilité
 chiffré (voir NF2 de la fiche de cadrage : ≥90% d'exactitude sur les questions chiffrées).
+Atteint.
 
 ---
 
@@ -364,10 +368,10 @@ chiffré (voir NF2 de la fiche de cadrage : ≥90% d'exactitude sur les question
 **Objectif :** livrable propre, documenté, présentable.
 
 Backlog :
-- [ ] Corrections finales
-- [ ] Documentation à jour (README, ADR, journal)
-- [ ] Rapport de stage
-- [ ] Préparation de la démonstration finale
+- [x] Corrections finales (voir JOURNAL.md pour le détail des derniers correctifs).
+- [x] Documentation à jour (README, ADR, journal) -- vérifiée et corrigée le 03/09.
+- [x] Rapport de stage (`docs/rapport_stage.tex`).
+- [ ] Préparation de la démonstration finale -- à faire par Ayman.
 
 **Definition of done :** repo propre, rapport prêt, démo répétée au moins une fois avant
 la présentation officielle.
