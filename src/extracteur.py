@@ -17,12 +17,10 @@ from .models import Document
 
 Tableau = list[list[str]]
 
-# Garde-fou anti-texte-illisible (ajoute le 03/09, voir JOURNAL.md 30 aout et
-# TODO.md) : certains PDF a mise en page dense ou police legacy (ex. document #75,
-# "Les Cahiers du Plan N 33", police arabe legacy) font ressortir de pdfplumber du
+# Garde-fou anti-texte-illisible : certains PDF a mise en page dense ou police legacy
+# (ex. "Les Cahiers du Plan N 33", police arabe legacy) font ressortir de pdfplumber du
 # texte qui n'est pas du texte -- des symboles/glyphes bruts sans rapport avec le
-# contenu reel (deja trouve 9 chunks de ce type indexes dans Chroma/BM25 avant ce
-# correctif). Rien ne signale ce cas a priori (pas d'erreur, pas d'exception -- juste
+# contenu reel. Rien ne signale ce cas a priori (pas d'erreur, pas d'exception -- juste
 # une chaine de caracteres qui a la forme d'un texte) : le seul moyen de le detecter
 # est heuristique, sur la forme du texte extrait lui-meme.
 #
@@ -40,13 +38,12 @@ LONGUEUR_MIN_MESURE = 30
 
 # Limite connue et assumee : ce garde-fou detecte et exclut le texte illisible, il ne
 # le corrige pas -- le document reste dans le corpus mais sans son texte narratif
-# (ex. "Chiffres cles, 2026", brochure dense bilingue AR/EN, testee le 30 aout : deja
-# illisible pour pdfplumber avant meme ce correctif). Piste de solution identifiee
-# mais non implementee (cout/risque juges trop eleves pour un cas isole en fin de
-# stage) : rendre chaque page en image et passer par un moteur OCR (ex. Tesseract) au
-# lieu de lire les codes de caracteres du PDF -- contournerait le mauvais mapping de
-# police en lisant les glyphes visuellement, comme le ferait un humain. A explorer si
-# ce type de document devient frequent dans le corpus.
+# (ex. "Chiffres cles, 2026", brochure dense bilingue AR/EN, deja illisible pour
+# pdfplumber). Piste de solution identifiee mais non implementee (cout/risque juges
+# trop eleves pour un cas isole) : rendre chaque page en image et passer par un moteur
+# OCR (ex. Tesseract) au lieu de lire les codes de caracteres du PDF -- contournerait
+# le mauvais mapping de police en lisant les glyphes visuellement, comme le ferait un
+# humain. A explorer si ce type de document devient frequent dans le corpus.
 
 
 

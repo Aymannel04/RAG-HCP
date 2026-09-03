@@ -58,12 +58,11 @@ PATTERN_PARAM_START = re.compile(r"[?&]start=(\d+)")
 
 # Parametre de pagination observe sur les pages hcp.ma/downloads/?tag=... (ex.
 # "...&p=20") -- different de ?start= ci-dessus, propre a ce systeme de telechargements
-# (voir Scraper.collecter_depuis_telechargements). Trouve le 30/08 en diagnostiquant un
-# document ("Chiffres cles 2026") absent du corpus : aucune des 3 categories couvertes
-# par data/listing_urls.py ne le referencait, car "Chiffres cles" est une publication
-# transversale (tag "Publications generales"), pas rattachee a un sous-theme -- d'ou ce
-# flux distinct base sur le tag "Dernieres parutions", qui liste toutes les nouveautes
-# tous themes confondus.
+# (voir Scraper.collecter_depuis_telechargements). Sert au flux base sur le tag
+# "Dernieres parutions", qui liste toutes les nouveautes tous themes confondus --
+# necessaire car les 3 categories couvertes par data/listing_urls.py ne referencent
+# pas les publications transversales (tag "Publications generales"), non rattachees a
+# un sous-theme.
 PATTERN_PARAM_P = re.compile(r"[?&]p=(\d+)")
 
 
@@ -317,8 +316,8 @@ class Scraper:
         """Repere les entrees d'une page hcp.ma/downloads/?tag=... : chaque entree est un
         bloc `div.delimiter` contenant un titre + lien direct vers le fichier
         (`div.titre_fichier a`), une icone de type (`img` dans `/_images/ext/...`), et
-        une date "Publie le : JJ/MM/AAAA". Structure HTML verifiee le 30/08 sur la page
-        reelle (tag "Dernieres parutions"), differente des pages
+        une date "Publie le : JJ/MM/AAAA". Structure HTML verifiee sur la page reelle
+        (tag "Dernieres parutions"), differente des pages
         "Publications-<sous-theme>_rXXX.html" (voir _extraire_urls_articles)."""
         resultats: list[tuple[str, str, str, Optional[str], str]] = []
         for bloc in soup.select("div.delimiter"):

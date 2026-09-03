@@ -27,9 +27,8 @@ Décisions d'implémentation :
   mémoire ne portent que `id_document`, pas le titre/URL/date de la publication source
   -- nécessaires pour la citation (exigence NF3, traçabilité). Même patron que
   `LookupStructure(conn)`.
-- **Chemin mixte (contexte = `ContexteMixte`), ajouté le 28/07** : cas décrit dans
-  note_stockage_routage_benchmark.pdf (Q4), jamais implémenté jusque-là -- une question
-  comme "pourquoi le chômage a-t-il augmenté ?" a une composante chiffrée ET narrative.
+- **Chemin mixte (contexte = `ContexteMixte`)** : une question comme "pourquoi le
+  chômage a-t-il augmenté ?" a une composante chiffrée ET narrative.
   `Routeur.classifier` renvoie désormais `TypeQuestion.MIXTE` pour ce cas (voir
   `src/routeur.py`) et `scripts/poser_question.py` interroge les deux chemins en
   parallèle. Ici, la fusion respecte le même principe fondateur que le chemin chiffré
@@ -170,11 +169,9 @@ class Generateur:
         try:
             texte = self._fonction_generation(question, texte_contexte)
         except Exception:
-            # Degradation propre (voir bug du 24/08 -- ConnectionError Mistral qui
-            # faisait planter toute l'interface Streamlit) : meme philosophie que le
-            # fallback LLM de Routeur/Reformulateur, jamais applique ici jusqu'a
-            # present. Une panne reseau/API ne doit jamais faire crasher tout le
-            # pipeline, seulement degrader vers un message explicite.
+            # Degradation propre, meme philosophie que le fallback LLM de
+            # Routeur/Reformulateur : une panne reseau/API ne doit jamais faire
+            # crasher tout le pipeline, seulement degrader vers un message explicite.
             return Reponse(
                 texte=(
                     "Une erreur technique (reseau ou service de generation indisponible) "

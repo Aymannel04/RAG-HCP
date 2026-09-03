@@ -35,11 +35,8 @@ class ConstructeurIndicateurs:
         """Transforme la réponse de `bds_client.recuperer_indicateur(code)` en une liste
         d'`Indicateur`, un par (période, ventilation).
 
-        Forme réelle de `indicateur_json` renvoyée par l'API BDS (vérifiée en conditions
-        réelles sur I4001 le 28/07, voir JOURNAL.md -- corrige une hypothèse fausse sur
-        le format des clés qui faisait que TOUT indicateur à plusieurs dimensions
-        croisées (sexe x milieu x âge, ex. I4001/I3287/I1590) finissait avec
-        `region=None` sur toutes ses lignes, silencieusement) :
+        Forme réelle de `indicateur_json` renvoyée par l'API BDS (vérifiée en
+        conditions réelles sur I4001) :
         {
           "code": "I4001", "label": "...",
           "metaData": {"unit": "%", ...},

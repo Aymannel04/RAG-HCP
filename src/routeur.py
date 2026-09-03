@@ -1,28 +1,20 @@
 """
 Module Routeur — module 5 de l'architecture.
 Rôle : classifier chaque question (chiffre précis vs notion/narratif) et aiguiller
-vers LookupStructure ou RetrievalReranker.
-Voir les deux scénarios formalisés dans docs/conception_uml_v3.pdf, figures 5 et 6
-(exemples de référence : "Quel est le taux de chômage actuel ?" -> CHIFFRE,
-"C'est quoi le RGPH ?" -> NOTION).
+vers LookupStructure ou RetrievalReranker (exemples de référence : "Quel est le taux
+de chômage actuel ?" -> CHIFFRE, "C'est quoi le RGPH ?" -> NOTION).
 
 Décision d'implémentation : classification par heuristique de mots-clés en chemin
-principal, plutôt que par appel LLM systématique, contrairement à ce qu'envisageait le
-docstring d'origine ("V1 : appel LLM"). Deux raisons :
-1. Cette approche était déjà celle proposée à l'encadrante dans
-   docs/note_stockage_routage_benchmark.pdf (section routage) comme option V1, l'appel
-   LLM étant explicitement repoussé en V2 dans ce même document.
-2. Un classifieur qui ne dépend d'aucun LLM reste un choix défendable en soi (rapide,
-   gratuit, déterministe, donc plus facile à tester et déboguer qu'un appel LLM pour
-   une tâche aussi simple qu'une classification binaire), et découple ce module du
-   choix du LLM de génération (voir ADR 0002).
+principal, plutôt que par appel LLM systématique. Un classifieur qui ne dépend
+d'aucun LLM reste un choix défendable en soi (rapide, gratuit, déterministe, donc plus
+facile à tester et déboguer qu'un appel LLM pour une tâche aussi simple qu'une
+classification binaire), et découple ce module du choix du LLM de génération (ADR
+0002).
 
-V2 ajoutée le 28/07 (celle évoquée dans note_stockage_routage_benchmark.pdf, jamais
-implémentée jusqu'ici) : `fonction_classification_llm` optionnelle, appelée en DERNIER
-RECOURS seulement, quand ni `MOTS_NOTION`, ni `MOTS_CHIFFRE`, ni `PATTERN_PERIODE` n'ont
-permis de trancher. Déclenchée par un cas réel observé en test (voir TODO.md) : une
-question chiffrée légitime formulée avec un vocabulaire absent des deux listes tombe
-par défaut sur NOTION -- dégradation propre (RetrievalReranker reste capable de
+`fonction_classification_llm` optionnelle, appelée en DERNIER RECOURS seulement, quand
+ni `MOTS_NOTION`, ni `MOTS_CHIFFRE`, ni `PATTERN_PERIODE` n'ont permis de trancher :
+une question chiffrée légitime formulée avec un vocabulaire absent des deux listes
+tombe par défaut sur NOTION -- dégradation propre (RetrievalReranker reste capable de
 répondre) mais pas idéale. Complèter `MOTS_CHIFFRE` à la main marche mais ne suivra
 jamais toutes les formulations possibles. L'heuristique reste le chemin principal
 (rapide, gratuit, déterministe) : le LLM n'est qu'un filet de sécurité pour les cas
@@ -32,13 +24,10 @@ classification, se contente de retomber sur le même défaut NOTION qu'avant.
 Injectable au constructeur (même patron que `fonction_generation` de `Generateur`) :
 `llm_mistral.classifier_question` en production, une fonction factice dans les tests.
 
-Cas mixte implémenté le 28/07 (celui décrit dans note_stockage_routage_benchmark.pdf,
-Q4 de la synthèse Sprint 2/3 -- "pourquoi le chômage a-t-il augmenté ?" a une composante
-chiffrée ET narrative, seul RetrievalReranker répondait jusqu'ici, LookupStructure
-n'était jamais sollicité). `TypeQuestion.MIXTE` est renvoyé quand un signal narratif ET
-un signal chiffré sont TOUS LES DEUX présents -- `scripts/poser_question.py` interroge
-alors les deux chemins et `Generateur` fusionne les deux résultats (voir
-`ContexteMixte`).
+`TypeQuestion.MIXTE` est renvoyé quand un signal narratif ET un signal chiffré sont
+TOUS LES DEUX présents (ex. "pourquoi le chômage a-t-il augmenté ?") --
+`scripts/poser_question.py` interroge alors les deux chemins et `Generateur` fusionne
+les deux résultats (voir `ContexteMixte`).
 
 Piège évité : associer N'IMPORTE quel mot de `MOTS_NOTION` à un mot de `MOTS_CHIFFRE`
 suffirait à declarer MIXTE, mais casserait des questions purement notionnelles qui
@@ -75,8 +64,8 @@ MOTS_NOTION = [
 ]
 
 # Sous-ensemble de MOTS_NOTION qui, combiné à un signal chiffré, déclenche MIXTE plutôt
-# que NOTION pur (voir docstring de module, section "Cas mixte implémenté le 28/07") --
-# uniquement les mots qui parlent d'évolution/cause d'une valeur dans le temps, jamais
+# que NOTION pur (voir docstring de module, section "Cas mixte") -- uniquement les mots
+# qui parlent d'évolution/cause d'une valeur dans le temps, jamais
 # les mots purement définitionnels/méthodologiques (qui restent NOTION pur même s'ils
 # citent un nom d'indicateur contenant un mot de MOTS_CHIFFRE).
 MOTS_NOTION_COMBINABLES = {
@@ -86,19 +75,16 @@ MOTS_NOTION_COMBINABLES = {
 # Signal chiffré : la question porte sur une valeur précise, un indicateur, une
 # statistique isolée -- typiquement une question courte avec un mot-outil de mesure.
 #
-# Complete le 28/07 (limite trouvee en conditions reelles, voir TODO.md) : la liste
-# d'origine ne couvrait que "taux"/"nombre"/"valeur"/"indice"/"pourcentage", ce qui
-# faisait tomber par defaut sur NOTION toute question chiffree formulee autrement --
-# ex. "Quelle est la structure des actifs occupés sans diplôme ?" ne matchait AUCUN
-# mot-cle des deux listes, et atterrissait sur RetrievalReranker au lieu de
-# LookupStructure (repli honnete grace au comportement par defaut deja documente, mais
-# qui privait la question du chemin chiffre exact). Ajouts choisis en reprenant les
-# formulations reelles des noms d'indicateurs cures (voir data/indicateurs_cures.py :
-# "Structure des actifs occupés", "Effectif des chômeurs", "Espérance de vie...",
-# "Valeurs ajoutées...", "Population...") plus quelques tournures naturelles
-# equivalentes ("répartition", "part de", "proportion de") pour les questions sur une
-# ventilation (sexe/milieu/diplome/branche, voir src/lookup_structure.py) qui ne
-# citent pas forcement le mot "taux".
+# Volontairement large plutôt que limitée à "taux"/"nombre"/"valeur"/"indice"/
+# "pourcentage" : une question chiffrée formulée autrement (ex. "Quelle est la
+# structure des actifs occupés sans diplôme ?") doit aussi matcher, sous peine de
+# retomber par défaut sur NOTION (repli honnête -- RetrievalReranker reste capable de
+# répondre -- mais qui prive la question du chemin chiffré exact). Choix faits en
+# reprenant les formulations réelles des noms d'indicateurs curés (voir
+# data/indicateurs_cures.py) plus des tournures naturelles équivalentes
+# ("répartition", "part de", "proportion de") pour les questions sur une ventilation
+# (sexe/milieu/diplôme/branche, voir src/lookup_structure.py) qui ne citent pas
+# forcément le mot "taux".
 MOTS_CHIFFRE = [
     "combien", "quel est le taux", "quelle est le taux", "quel est le nombre",
     "quelle est la valeur", "quel est le pourcentage", "en pourcentage",
@@ -108,9 +94,6 @@ MOTS_CHIFFRE = [
     "part de", "part des", "proportion de", "proportion des",
     "effectif de", "effectif des", "espérance de vie", "valeurs ajoutées",
     "population de", "population du",
-    # Ajouts du 03/09 (limites réelles trouvées en construisant le jeu de test de
-    # fiabilité, voir JOURNAL.md) : questions chiffrées légitimes qui ne matchaient
-    # aucun mot-clé ci-dessus, donc retombaient par défaut sur NOTION.
     "indice synthétique", "produit intérieur brut", "exportations de",
     "exportations des", "importations", "taux net", "population urbaine",
     "population rurale", "valeur ajoutée",
@@ -121,8 +104,7 @@ MOTS_CHIFFRE = [
 # renfort si aucun des deux dictionnaires ci-dessus n'a tranché.
 PATTERN_PERIODE = re.compile(r"\b(19|20)\d{2}\b|\bT[1-4]\b")
 
-# Salutation / small talk -- ajoute le 23/08, suite a un cas observe en conditions
-# reelles (voir TODO.md) : une question comme "hello" ou "salut" ne matche aucun des
+# Salutation / small talk : une question comme "hello" ou "salut" ne matche aucun des
 # deux dictionnaires ci-dessus, tombe par defaut sur NOTION, et part dans une vraie
 # recherche semantique (RetrievalReranker + LLM) pour finir par un refus grounding
 # correct mais peu naturel ("je ne trouve pas d'information pertinente"). Verifie en
@@ -138,7 +120,7 @@ PATTERN_SALUTATION = re.compile(
 )
 
 # (question) -> "CHIFFRE", "NOTION" ou "MIXTE" (toute autre valeur est traitee comme "ne
-# sait pas"). Voir docstring de module, section "V2 ajoutee le 28/07".
+# sait pas"). Voir docstring de module.
 TypeFonctionClassification = Callable[[str], str]
 
 

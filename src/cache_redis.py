@@ -1,6 +1,5 @@
 """
-Module cache_redis — cache et historique de conversation, ajoutés le 28/07 (voir
-JOURNAL.md et TODO.md).
+Module cache_redis — cache et historique de conversation.
 
 Deux responsabilités distinctes, dans le même fichier parce qu'elles partagent le même
 client Redis injectable :
@@ -8,11 +7,10 @@ client Redis injectable :
 - `CacheReponses` : cache question -> réponse, UNIQUEMENT pour le chemin NOTION (voir
   `scripts/poser_question.py`). Le chemin CHIFFRE est déjà une requête SQL directe
   quasi instantanée -- rien à gagner à le cacher. Le chemin MIXTE est délibérément
-  exclu : sa partie chiffrée est recalculée à chaque appel pour rester à jour (voir
-  ADR 0004, pré-remplissage nocturne), et mettre en cache une réponse mixte risquerait
-  de resservir un chiffre périmé à côté d'une explication qui, elle, ne change pas --
-  incohérent avec tout le travail fait le 28/07 pour garantir un chiffre toujours
-  exact. Seul le NOTION pur n'a pas ce problème (rien de chiffré dedans).
+  exclu : sa partie chiffrée est recalculée à chaque appel pour rester à jour (ADR
+  0004, pré-remplissage nocturne), et mettre en cache une réponse mixte risquerait de
+  resservir un chiffre périmé à côté d'une explication qui, elle, ne change pas. Seul
+  le NOTION pur n'a pas ce problème (rien de chiffré dedans).
 
   TTL de 24h, aligné sur `scripts/decouverte_publications.py --quotidien` : une
   réponse ne doit jamais survivre plus longtemps que le cycle de rafraîchissement du
@@ -24,7 +22,7 @@ client Redis injectable :
   petit bout qui génère/retient l'id de session change, pas le stockage sous-jacent.
   Alternative envisagée et écartée : `st.session_state` de Streamlit directement --
   fonctionne, mais piège l'historique dans Streamlit, aucune portabilité si
-  l'interface change (voir discussion du 28/07).
+  l'interface change.
 
 Correspondance question -> cache : EXACTE, sur la question normalisée (minuscules,
 espaces réduits) -- voir `normaliser_question`. Choix délibéré pour cette V1 : une
@@ -32,12 +30,11 @@ correspondance sémantique (embeddings de la question + seuil de similarité)
 reconnaîtrait plus de reformulations ("chômage actuel" ~ "chômage aujourd'hui") mais
 avec un risque réel de faux positif -- retourner la réponse d'une question jugée
 "assez proche" mais en réalité différente. Prévu comme extension V2, une fois la
-version exacte validée en conditions réelles (voir TODO.md).
+version exacte validée en conditions réelles.
 
 Redis choisi ici -- plutôt que SQLite, utilisé partout ailleurs dans le projet -- par
-choix explicite d'Ayman, pour la pratique de l'outil : aucune nécessité de performance
-démontrée au volume actuel du prototype (même mise en garde que pour toute autre
-décision d'infrastructure de ce projet, voir TODO.md section Redis).
+choix explicite pour la pratique de l'outil : aucune nécessité de performance
+démontrée au volume actuel du prototype.
 
 Client injectable au constructeur, même patron que `fonction_embedding`/
 `fonction_generation` ailleurs dans le projet : `fakeredis.FakeRedis()` dans les tests
@@ -107,13 +104,11 @@ class HistoriqueConversation:
         self._client = client_redis
 
     def ajouter(self, id_session: str, question: str, reponse: Reponse) -> None:
-        """Ajoute un echange, avec un TTL glissant de 24h sur la cle de session
-        (bug trouve le 27/08, voir JOURNAL.md -- cette cle n'avait jusqu'ici AUCUNE
-        expiration, contrairement au cache : elle s'accumulait indefiniment dans
-        Redis). `expire()` est rappele a chaque ajout plutot que fixe une seule fois
-        a la creation : une conversation active voit son TTL repousse a chaque
-        message, seule une session vraiment abandonnee finit par expirer -- jamais
-        de coupure en pleine conversation."""
+        """Ajoute un echange, avec un TTL glissant de 24h sur la cle de session.
+        `expire()` est rappele a chaque ajout plutot que fixe une seule fois a la
+        creation : une conversation active voit son TTL repousse a chaque message,
+        seule une session vraiment abandonnee finit par expirer -- jamais de coupure
+        en pleine conversation."""
         if self._client is None:
             return
         entree = json.dumps({"question": question, "reponse": asdict(reponse)})

@@ -120,35 +120,19 @@ def reformuler_question(question: str, historique_texte: str) -> str:
     (TypeFonctionReformulation) : (question, historique_texte) -> question autonome.
 
     Appelee des qu'un historique REEL existe pour la session (voir
-    `src/reformulateur.py::reformuler_si_necessaire` -- l'heuristique de detection de
-    follow-up ambigu, evoquee ici a l'origine, a ete essayee puis abandonnee le 23/08,
-    peu fiable en conditions reelles). "Reel" depuis le 30/08 : les echanges de simple
+    `src/reformulateur.py::reformuler_si_necessaire`). Les echanges de simple
     salutation sont ecartes de l'historique avant reformulation (voir
     `src/reformulateur.py::_filtrer_salutations`).
 
-    PROMPT_SYSTEME_REFORMULATION durci le 30/08 (bug reel observe en conditions
-    reelles, voir JOURNAL.md) : une question deja autonome et SANS RAPPORT avec le
-    sujet de l'historique ("donne taux d'urbanisation" apres une conversation sur la
-    population) se faisait quand meme enrichir de details de l'historique ("...de la
-    population du Maroc pour l'annee 2026...") -- la premiere version du prompt
-    autorisait explicitement a puiser des informations "dans l'historique fourni",
-    sans jamais dire de s'abstenir quand la question n'en a pas besoin. Le prompt
-    distingue desormais explicitement deux cas (reference vague a resoudre vs question
-    deja autonome meme si elle change de sujet) avec un exemple concret de ce dernier
-    cas, plutot qu'une regle generale ambigue.
-
-    Regle Bug 5 ajoutee le 3/09 (bug reel observe en conditions reelles, voir
-    JOURNAL.md) : "hello" puis "c quoi rghp" apres 3 questions consecutives sur
-    le chomage a produit une reformulation qui relie a tort "rghp" au chomage feminin
-    (mauvaise reponse : 20,5% au lieu d'une explication du RGPH). Cause : le modele a
-    traite le fait de ne pas reconnaitre "rghp" (faute de frappe) comme une raison de
-    puiser dans l'historique, alors qu'aucun mot de reference implicite (Cas 1) n'etait
-    present -- une confusion entre "je ne comprends pas bien cette question" et "cette
-    question fait reference a l'historique", jamais distinguee explicitement dans la
-    version precedente du prompt. Le prompt precise desormais qu'une question courte,
+    PROMPT_SYSTEME_REFORMULATION distingue explicitement deux cas : une reference
+    vague a resoudre a partir de l'historique (Cas 1), vs une question deja autonome
+    meme si elle change de sujet, qui ne doit alors etre enrichie d'AUCUN detail
+    puise dans l'historique (Cas 2). Le prompt precise aussi qu'une question courte,
     mal orthographiee ou abregee n'est PAS en soi une reference implicite : seule la
-    presence d'un mot de reference explicite justifie d'aller chercher dans
-    l'historique, avec l'exemple reel (rghp/chomage) inclus directement dans le prompt.
+    presence d'un mot de reference explicite ('ça', 'ce chiffre'...) justifie d'aller
+    chercher dans l'historique -- sans quoi le modele peut a tort relier une question
+    mal comprise au sujet precedent de la conversation plutot que de la traiter comme
+    autonome.
 
     À injecter tel quel : `poser_question(..., fonction_reformulation=reformuler_question)`.
     """
@@ -188,9 +172,9 @@ def classifier_question(question: str) -> str:
     """Fonction de classification compatible avec Routeur (voir
     src/routeur.py::TypeFonctionClassification) : dernier recours seulement, appelee
     uniquement quand aucune regle par mots-cles n'a permis de trancher (voir docstring
-    de Routeur, section "V2 ajoutee le 28/07"). Renvoie la chaine brute renvoyee par le
-    modele ("CHIFFRE"/"NOTION" attendus) -- c'est Routeur qui valide/normalise et
-    retombe sur son comportement par defaut si la reponse est inattendue.
+    de Routeur). Renvoie la chaine brute renvoyee par le modele ("CHIFFRE"/"NOTION"
+    attendus) -- c'est Routeur qui valide/normalise et retombe sur son comportement
+    par defaut si la reponse est inattendue.
 
     À injecter tel quel : `Routeur(fonction_classification_llm=classifier_question)`.
     """
