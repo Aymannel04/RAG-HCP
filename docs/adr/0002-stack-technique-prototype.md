@@ -1,7 +1,8 @@
 # ADR 0002 — Choix de la stack technique pour le prototype
 
-**Statut :** proposé — à confirmer avec l'encadrante (voir hypothèses de travail,
-`docs/fiche_cadrage_v4.pdf` section 11)
+**Statut :** accepté — 21 juillet 2026 (mis à jour le 03/09 : le statut était resté
+« proposé » alors que le dernier point ouvert, le choix du LLM de génération, avait
+déjà été tranché par l'encadrante à cette date — voir « Décision » ci-dessous)
 
 ## Contexte
 

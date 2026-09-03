@@ -1,7 +1,7 @@
 # RAG HCP — Système de questions-réponses pour hcp.ma
 
-Stage réalisé au **Haut-Commissariat au Plan (HCP)**, Direction des Systèmes d'Information Statistiques.
-Binôme : **Ayman El Baida** et **Saad Mesbah**. Période : 1er juillet – fin août 2026.
+Stage réalisé au **Haut-Commissariat au Plan (HCP)**, Direction des Systèmes d'Information Statistiques,
+par **Ayman El Baida**. Période : 1er juillet – 3 septembre 2026.
 
 ## Idée du projet
 
@@ -19,8 +19,9 @@ Le détail complet (problématique, objectifs, architecture, risques, planning) 
 
 ## Documentation
 
-- [`docs/fiche_cadrage_v4.pdf`](docs/fiche_cadrage_v4.pdf) — note de cadrage complète (périmètre, besoins, architecture, risques, planning, glossaire). Source LaTeX : `docs/fiche_cadrage_v4.tex`.
-- [`docs/conception_uml_v3.pdf`](docs/conception_uml_v3.pdf) — dossier de conception UML/Merise (cas d'utilisation, MCD, MLD, classes, séquences, activité). Source LaTeX : `docs/conception_uml_v3.tex`.
+- [`docs/fiche_cadrage_v4.pdf`](docs/fiche_cadrage_v4.pdf) — note de cadrage d'origine (périmètre, besoins, architecture, risques, planning, glossaire), complétée d'encadrés « Mise à jour (03/09/2026) » qui signalent, section par section, ce qui a réellement changé depuis la rédaction initiale (7 juillet) et pourquoi. Source LaTeX : `docs/fiche_cadrage_v4.tex`.
+- [`docs/conception_uml_v4.pdf`](docs/conception_uml_v4.pdf) — dossier de conception UML/Merise (cas d'utilisation, MCD, MLD, classes, séquences, activité), version à jour incluant le scénario de question mixte et les modules ajoutés en cours de route (reformulation, cache). Source LaTeX : `docs/conception_uml_v4.tex`. `docs/conception_uml_v3.pdf` reste dans le dépôt à titre de version historique (Sprint 2).
+- [`docs/rapport_stage.pdf`](docs/rapport_stage.pdf) — rapport de stage complet (non versionné, voir `.gitignore` — document personnel).
 - `docs/adr/` — Architecture Decision Records : une note courte à chaque décision technique structurante.
 - `TODO.md` — planning découpé en tâches, semaine par semaine.
 - `JOURNAL.md` — journal de bord (une entrée par jour de travail), utile pour rédiger le rapport de stage a posteriori.
@@ -31,7 +32,8 @@ Le détail complet (problématique, objectifs, architecture, risques, planning) 
 src/                    code source, un module par classe du diagramme de classes
   models.py              structures de données partagées (Document, Chunk, Indicateur)
   scraper.py              module 1 — collecte des pages/PDF ciblés
-  extracteur.py            module 2 — nettoyage + séparation texte/tableaux
+  extracteur.py            module 2 — nettoyage + séparation texte/tableaux (+ garde-fou
+                             anti-texte-illisible, voir JOURNAL.md 03/09)
   indexeur_texte.py         module 3 — chunking, embeddings, index vectoriel + BM25
   constructeur_indicateurs.py  module 4 — structuration des indicateurs chiffrés
   routeur.py                 module 5 — classification de la question
@@ -39,14 +41,30 @@ src/                    code source, un module par classe du diagramme de classe
   lookup_structure.py          module 7 — requête exacte sur les indicateurs
   generateur.py                  module 8 — génération de la réponse sourcée
   interface.py                    module 9 — interface de démonstration
+  base_donnees.py         utilitaire — connexion/insertion SQLite, hors numérotation
+  bds_client.py            utilitaire — client de l'API BDS (bds.hcp.ma, ADR 0004),
+                             source primaire des indicateurs chiffrés
+  llm_mistral.py            utilitaire — client Mistral pour le chemin "notion" (ADR 0002)
+  cache_redis.py             module ajouté le 28/07 — cache de réponses + historique
+                              de conversation, non prévu dans la conception d'origine
+  reformulateur.py            module ajouté le 23/08 — reformulation des questions de
+                                suivi à partir de l'historique, non prévu non plus
 db/
   schema.sql              traduction SQL du MLD (documents, chunks, indicateurs)
-tests/                   tests unitaires (pytest)
+data/                    listes de seed (URLs, indicateurs curés) et cache de scraping
+scripts/                 points d'entrée exécutables (indexation, question en CLI,
+                          mesure de fiabilité NF2, rafraîchissement du corpus...)
+tests/                   tests unitaires (pytest) — 224/224 au 03/09/2026
 docs/                    livrables et documentation du projet
 ```
 
-Chaque module correspond exactement à une classe du diagramme de classes (`docs/conception_uml_v3.pdf`,
-figure 4) — le tableau de correspondance module/rôle/flux est dans la fiche de cadrage, section 8.1.
+Chaque module numéroté (1 à 9) correspond exactement à une classe du diagramme de classes
+(`docs/conception_uml_v4.pdf`, figure 4) — le tableau de correspondance module/rôle/flux
+est dans la fiche de cadrage, section 8.1. Les modules non numérotés (`base_donnees.py`,
+`bds_client.py`, `llm_mistral.py`, `cache_redis.py`, `reformulateur.py`) ont été ajoutés
+en cours de route, pour des besoins découverts en testant le système en conditions
+réelles plutôt qu'anticipés dans la conception initiale — voir leurs docstrings et
+`JOURNAL.md` pour le contexte de chaque ajout.
 
 ## Installation
 
@@ -84,6 +102,10 @@ pytest tests/ -v
 
 ## Statut d'avancement
 
-Voir `TODO.md`. En résumé : cadrage et conception terminés, Sprints 1 et 2 (collecte, extraction,
-indexation) validés en conditions réelles, Sprint 3 (retrieval + génération) fonctionnellement
-complet côté code — reste la validation en conditions réelles du reranker et du LLM Mistral.
+Voir `TODO.md` et `JOURNAL.md` pour le détail. En résumé, au 3 septembre 2026 (fin de stage) :
+projet fonctionnellement complet et validé en conditions réelles de bout en bout (scraping,
+extraction, indexation, routage, recherche hybride + reranking, lookup structuré, génération,
+cache/historique, reformulation des questions de suivi, interface Streamlit). Jeu de test de
+fiabilité (NF2) construit et exécuté : 93,3 % (28/30), objectif atteint — voir
+`scripts/mesurer_fiabilite.py`. Suite de tests automatisés : 224/224. Seul point encore ouvert
+à cette date : la préparation de la démonstration finale.
