@@ -1,0 +1,160 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{babel}
+\renewcommand{\contentsname}{Table des mati\`eres}
+\usepackage{lmodern}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{graphicx}
+\usepackage{parskip}
+\usepackage{hyperref}
+
+\definecolor{navy}{HTML}{111111}
+\definecolor{gold}{HTML}{1565C0}
+\definecolor{greytext}{HTML}{555555}
+
+\titleformat{\section}{\Large\bfseries\color{navy}}{\thesection}{0.6em}{}[{\color{navy}\titlerule}]
+\titleformat{\subsection}{\large\bfseries\color{gold}}{\thesubsection}{0.6em}{}
+
+\hypersetup{colorlinks=true, linkcolor=navy, urlcolor=navy}
+
+% Figures numerotees via le compteur LaTeX standard (\ref fonctionne partout dans le
+% document, meme si l'ordre des sections change) -- style visuel identique a v3
+% (legende grise italique sous la figure, pas le \caption standard de LaTeX).
+\newcommand{\diagfig}[3]{%
+\begin{figure}[h!]
+\centering
+\includegraphics[width=0.92\textwidth]{#1}
+\refstepcounter{figure}\label{#3}
+\par\vspace{4pt}
+{\small\color{greytext}\itshape Figure \thefigure\ -- #2}
+\end{figure}
+}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{2cm}
+{\Huge\bfseries\color{navy} Dossier de conception -- v4\par}
+\vspace{0.5cm}
+{\Large\bfseries\color{gold} Analyse conceptuelle UML et Merise -- Syst\`eme RAG pour hcp.ma\par}
+\vspace{1.5cm}
+{\large\color{greytext} Structure d'accueil~: Haut-Commissariat au Plan (HCP), Direction des Syst\`emes d'Information Statistiques\par}
+\vspace{0.3cm}
+{\large\color{greytext} Bin\^ome~: Ayman El Baida et Saad Mesbah\par}
+\vspace{0.3cm}
+{\large\color{greytext} P\'eriode du stage~: 1er juillet -- fin ao\^ut 2026\par}
+\vspace{0.3cm}
+{\large\itshape\color{greytext} R\'evision du dossier de conception initial (\texttt{conception\_uml\_v3.pdf}, 15 juillet) --\\mise \`a jour au 31 ao\^ut apr\`es six semaines d'impl\'ementation et de tests en conditions r\'eelles\par}
+\vfill
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Ce document r\'evise le dossier de conception initial (\texttt{conception\_uml\_v3.pdf}, 15 juillet) \`a la lumi\`ere de six semaines d'impl\'ementation et de tests en conditions r\'eelles. L'architecture \`a haut niveau -- s\'eparation stricte entre texte narratif et donn\'ees chiffr\'ees, routage par le \texttt{Routeur} -- reste valide et constitue toujours le fil conducteur du syst\`eme. Trois \'evolutions substantielles se sont n\'eanmoins ajout\'ees depuis v3, chacune d\'ecid\'ee et test\'ee en conditions r\'eelles~:
+
+\begin{itemize}
+\item une \textbf{m\'emoire conversationnelle} (cache de r\'eponses et historique de session, Redis, 28 juillet) et un module de \textbf{reformulation} des questions de suivi (23 ao\^ut) ;
+\item un \textbf{troisi\`eme chemin de traitement}, MIXTE, pour les questions qui demandent \`a la fois un chiffre et une explication (28 juillet), en plus des deux chemins CHIFFRE/NOTION d\'ej\`a formalis\'es en v3 ;
+\item le remplacement de facto de l'extraction de tableaux PDF/XLSX comme source principale des indicateurs chiffr\'es par l'\textbf{API de la BDS} (\texttt{bds.hcp.ma}, ADR 0004), d\'ej\`a document\'e dans un compl\'ement s\'epar\'e (\texttt{complement\_conception\_bds.pdf}, 15 juillet) et int\'egr\'e ici dans une vue d'ensemble unique.
+\end{itemize}
+
+Ce document s'ouvre sur une vue d'ensemble de l'architecture (section~\ref{sec:archi}), puis reprend les huit diagrammes UML/Merise de v3 (cas d'utilisation, MCD, MLD, classes, s\'equences, activit\'e), auxquels s'ajoute un neuvi\`eme diagramme de s\'equence pour le sc\'enario MIXTE. Chaque diagramme est accompagn\'e d'une analyse qui signale explicitement ce qui a chang\'e depuis v3 -- et, tout aussi important, ce qui a \'et\'e con\c{c}u mais jamais impl\'ement\'e, par souci de fid\'elit\'e entre ce document et le code r\'eel (voir section~\ref{sec:ecarts}).
+
+\section{Vue d'ensemble de l'architecture}\label{sec:archi}
+Cette vue d'ensemble pr\'ec\`ede volontairement les diagrammes UML/Merise d\'etaill\'es~: c'est le m\^eme sch\'ema que celui utilis\'e dans \texttt{fiche\_cadrage\_v4.pdf} et \texttt{rapport\_stage.pdf} (fichier \texttt{images/architecture.png}, partag\'e entre les trois documents), mis \`a jour ici pour refl\'eter l'\'etat r\'eel du syst\`eme au 31 ao\^ut plut\^ot que la proposition initiale de juillet.
+
+\diagfig{images/architecture.png}{Architecture g\'en\'erale du syst\`eme RAG hcp.ma}{fig:archi}
+
+\subsection*{Analyse}
+Deux changements distinguent cette version de celle de juillet. D'abord, les \textbf{deux sources d'ingestion sont d\'esormais explicitement ind\'ependantes}~: la branche texte (scraping hcp.ma, colonne de gauche) et la branche chiffres (API BDS, colonne de droite) ne partagent plus une \'etape commune d'\guillemotleft~Ingestion / Extraction~\guillemotright\ comme le sugg\'erait le sch\'ema de juillet -- elles ont des d\'eclencheurs et des calendriers distincts (voir aussi figure~\ref{fig:activite}). Ensuite, un bloc \textbf{m\'emoire conversationnelle} (Redis, encadr\'e en pointill\'e bleu \`a droite) appara\^it pour la premi\`ere fois~: il n'existait pas en juillet et s'est ajout\'e au fil du d\'eveloppement (28 juillet -- 23 ao\^ut). Le reste du sch\'ema -- routage, recherche hybride vs lookup structur\'e, g\'en\'eration LLM avec citation obligatoire, interface de chat -- reste fid\`ele \`a la proposition initiale.
+
+\section{Diagramme de cas d'utilisation}
+Ce diagramme fixe le p\'erim\`etre fonctionnel du syst\`eme en identifiant les acteurs et leurs interactions, avant toute consid\'eration technique. \textbf{Inchang\'e depuis v3} : les besoins fonctionnels F1 \`a F6 (voir \texttt{fiche\_cadrage\_v4.pdf}) n'ont pas \'evolu\'e~; la m\'emoire conversationnelle et le cas MIXTE sont des raffinements internes du cas d'utilisation \guillemotleft~poser une question~\guillemotright, pas de nouveaux cas d'utilisation.
+
+\diagfig{images/uml_use_case.png}{Diagramme de cas d'utilisation du syst\`eme RAG hcp.ma}{fig:usecase}
+
+\subsection*{Analyse}
+Deux acteurs sont identifi\'es. L'\textbf{Utilisateur}, repr\'esentant le grand public visiteur de hcp.ma, interagit avec le syst\`eme pour poser une question en langage naturel, consulter une r\'eponse sourc\'ee, et donner un retour sur cette r\'eponse. L'\textbf{Administrateur}, rattach\'e au service SI, dispose de cas d'utilisation distincts~: mettre \`a jour le contenu index\'e, consulter l'historique des questions pos\'ees, et superviser la fiabilit\'e du syst\`eme. Cette s\'eparation des r\^oles montre que le syst\`eme doit exposer deux niveaux d'interaction~: une interface publique simple et une interface de gestion plus technique.
+
+\section{Mod\`ele conceptuel de donn\'ees (MCD)}
+Le MCD formalise la partie strictement relationnelle du syst\`eme, selon la m\'ethode Merise. \textbf{Structure inchang\'ee depuis v3} (voir aussi \texttt{complement\_conception\_bds.pdf}, section 2)~: aucune entit\'e ni association n'a \'et\'e ajout\'ee ou supprim\'ee malgr\'e l'arriv\'ee de l'API BDS -- seuls deux attributs \'evoluent, mis en \'evidence en rouge sur la figure.
+
+\diagfig{images/uml_mcd.png}{MCD des entit\'es DOCUMENT, CHUNK et INDICATEUR}{fig:mcd}
+
+\subsection*{Analyse}
+Trois entit\'es structurent ce mod\`ele~: DOCUMENT, CHUNK et INDICATEUR, reli\'ees par les m\^emes deux associations qu'en v3 (\guillemotleft~contient~\guillemotright\ et \guillemotleft~est source de~\guillemotright, cardinalit\'es inchang\'ees). Le domaine de l'attribut \texttt{type} de DOCUMENT s'est \'etendu (\texttt{'api'} pour une fiche synth\'etique repr\'esentant un indicateur BDS, \texttt{'docx'} pour les notes IPC/IPPI, ADR 0003/0005) et INDICATEUR gagne \texttt{code\_bds}, cl\'e de la strat\'egie de cache d\'ecrite en section~\ref{sec:ecarts}. L'index vectoriel des embeddings reste, comme en v3, volontairement hors de ce mod\`ele~: ce n'est pas une structure relationnelle.
+
+\section{Mod\`ele logique de donn\'ees (MLD)}
+Le MLD traduit le MCD en sch\'ema de tables directement impl\'ementable, et correspond exactement \`a \texttt{db/schema.sql} tel qu'ex\'ecut\'e en production.
+
+\diagfig{images/uml_mld.png}{MLD : tables DOCUMENT, CHUNK et INDICATEUR avec cl\'es primaires et \'etrang\`eres}{fig:mld}
+
+\subsection*{Analyse}
+Les deux cl\'es \'etrang\`eres (\texttt{id\_document} dans CHUNK et INDICATEUR) sont inchang\'ees depuis v3 et continuent de garantir l'exigence NF3 (tra\c{c}abilit\'e syst\'ematique). La nouveaut\'e est \texttt{indicateur.code\_bds} (nullable, index\'ee via \texttt{idx\_indicateur\_code\_bds})~: pour une ligne extraite d'un PDF/XLSX, elle reste \texttt{NULL} comme avant~; pour une ligne venant de l'API BDS, elle contient le code stable de l'indicateur (ex. \texttt{I3181}) et sert de cl\'e d'upsert au pr\'e-remplissage nocturne (voir figure~\ref{fig:activite}, colonne B).
+
+\section{Diagramme de classes}
+Ce diagramme transpose les modules du syst\`eme en classes logicielles. \textbf{\'Evolution la plus visible depuis v3}~: deux nouveaux modules transversaux (\texttt{Reformulateur}, \texttt{CacheRedis}) et un nouveau module d'acc\`es \`a l'API BDS (\texttt{BdsClient}) s'ajoutent aux neuf classes originales, avec une pr\'ecision importante sur ce qui est r\'eellement c\^abl\'e (traits pleins) et ce qui a \'et\'e con\c{c}u sans jamais \^etre impl\'ement\'e (trait gris pointill\'e -- voir section~\ref{sec:ecarts}).
+
+\diagfig{images/uml_classes.png}{Diagramme de classes des composants logiciels}{fig:classes}
+
+\subsection*{Analyse}
+Le c\oe ur du diagramme (Scraper $\to$ Extracteur $\to$ IndexeurTexte $\to$ Routeur $\to$ \{RetrievalReranker, LookupStructure\} $\to$ Generateur $\to$ Interface) est inchang\'e depuis v3. Trois ajouts~:
+\begin{itemize}
+\item \textbf{BdsClient} alimente d\'esormais \texttt{ConstructeurIndicateurs} en parall\`ele de (et en pratique \`a la place de) l'ancien chemin \texttt{Extracteur} $\to$ \texttt{ConstructeurIndicateurs.structurer(tableaux)}, qui reste dessin\'e en pointill\'e gris car jamais impl\'ement\'e (\texttt{NotImplementedError}, priorit\'e basse depuis que l'API BDS couvre l'essentiel des indicateurs cur\'es) ;
+\item \textbf{Reformulateur} s'intercale entre l'arriv\'ee de la question et le \texttt{Routeur}~: il r\'e\'ecrit une question de suivi ambigu\"e en question autonome en s'appuyant sur l'historique r\'ecent, avant toute classification ;
+\item \textbf{CacheRedis} (regroupant \texttt{CacheReponses} et \texttt{HistoriqueConversation}) est lu par le Reformulateur (historique) et encadre le chemin NOTION (cache de r\'eponses) et l'\'ecriture finale de l'historique -- en pointill\'e bleu sur la figure car sa pr\'esence est optionnelle~: en son absence (pas de serveur Redis), le syst\`eme continue de fonctionner \`a l'identique, simplement sans m\'emoire ni mise en cache.
+\end{itemize}
+Le \texttt{Routeur.classifier} renvoie d\'esormais quatre valeurs possibles (CHIFFRE, NOTION, MIXTE, SALUTATION) au lieu de deux~: c'est la source du diagramme de s\'equence suppl\'ementaire (figure~\ref{fig:seqmixte}).
+
+\section{Diagramme de s\'equence -- question chiffr\'ee}
+Ce diagramme illustre le chemin de traitement d'une question portant sur une valeur pr\'ecise. La logique de fond (requ\^ete exacte, aucune g\'en\'eration libre sur le chiffre) est inchang\'ee depuis v3~; les \'etapes 2-3 et 8 (encadr\'ees dans la figure) sont nouvelles.
+
+\diagfig{images/uml_seq_chiffre.png}{Sc\'enario \guillemotleft~Quel est le taux de ch\^omage actuel~?~\guillemotright}{fig:seqchiffre}
+
+\subsection*{Analyse}
+La caract\'eristique essentielle du sc\'enario, identique \`a v3, est l'absence de g\'en\'eration libre~: le \texttt{LookupStructure} ex\'ecute une requ\^ete directe sur la table \texttt{indicateur} (aliment\'ee soit par le pr\'e-remplissage BDS, soit -- rarement -- par extraction PDF/XLSX) et renvoie une valeur exacte accompagn\'ee de sa source. Les \'etapes nouvelles depuis v3 encadrent ce c\oe ur sans le modifier~: la question passe d'abord par \texttt{Reformulateur} (qui la laisse inchang\'ee si elle est d\'ej\`a autonome ou si aucun historique n'existe), et la question ORIGINALE (pas la reformul\'ee) est journalis\'ee dans l'historique en toute fin d'\'echange, pour rester fid\`ele \`a ce que l'utilisateur a r\'eellement tap\'e.
+
+\section{Diagramme de s\'equence -- question conceptuelle}
+Ce diagramme illustre le chemin emprunt\'e pour les questions explicatives ou m\'ethodologiques. \textbf{Nouveaut\'e depuis v3}~: un point de d\'ecision cache (\'etape 5), qui court-circuite le reranking et la g\'en\'eration LLM lorsque la question normalis\'ee a d\'ej\`a \'et\'e r\'epondue dans les derni\`eres 24h.
+
+\diagfig{images/uml_seq_conceptuel.png}{Sc\'enario \guillemotleft~C'est quoi le RGPH~?~\guillemotright}{fig:seqconceptuel}
+
+\subsection*{Analyse}
+Le chemin \guillemotleft~cache miss~\guillemotright\ (bande du bas) reproduit exactement le sc\'enario de v3~: le \texttt{RetrievalReranker} interroge l'index par recherche hybride, retrie les passages, et le \texttt{Generateur} synth\'etise une r\'eponse sourc\'ee. Le chemin \guillemotleft~cache hit~\guillemotright\ (bande du haut, nouveau) court-circuite tout cela~: aucun appel au reranker ni au LLM Mistral, la r\'eponse pr\'ec\'edemment g\'en\'er\'ee est renvoy\'ee telle quelle. Ce cache ne s'applique volontairement qu'au chemin NOTION pur~: le chemin CHIFFRE est d\'ej\`a une requ\^ete SQL directe (rien \`a gagner \`a la cacher), et le chemin MIXTE (figure~\ref{fig:seqmixte}) en est d\'elib\'er\'ement exclu pour que son chiffre reste \`a jour \`a chaque appel.
+
+\section{Diagramme de s\'equence -- question mixte (nouveau)}
+Ce diagramme suppl\'ementaire, absent de v3, formalise le troisi\`eme chemin de traitement ajout\'e le 28 juillet~: les questions qui demandent \`a la fois une valeur chiffr\'ee et une explication de son \'evolution (ex. \guillemotleft~pourquoi le ch\^omage a-t-il augment\'e~?~\guillemotright).
+
+\diagfig{images/uml_seq_mixte.png}{Sc\'enario \guillemotleft~Pourquoi le taux de ch\^omage a-t-il augment\'e~?~\guillemotright}{fig:seqmixte}
+
+\subsection*{Analyse}
+La caract\'eristique du sc\'enario MIXTE est le \textbf{dispatch parall\`ele}~: contrairement aux deux chemins pr\'ec\'edents qui s'excluent mutuellement, \texttt{LookupStructure} ET \texttt{RetrievalReranker} sont interrog\'es syst\'ematiquement, quoi qu'il arrive. Le \texttt{Generateur} d\'egrade ensuite proprement selon ce qui a \'et\'e trouv\'e~: chiffre et passages trouv\'es $\to$ r\'eponse fusionn\'ee avec deux sources cit\'ees (primaire et secondaire) ; chiffre seul $\to$ r\'eponse chiffr\'ee seule ; passages seuls (aucun indicateur trouv\'e) $\to$ repli sur une r\'eponse notion seule. Ce sc\'enario compl\`ete la bifurcation CHIFFRE/NOTION d\'ej\`a pr\'esente en v3 sans la remplacer~: c'est un troisi\`eme chemin, pas une fusion des deux pr\'ec\'edents dans le \texttt{Routeur} lui-m\^eme.
+
+\section{Diagramme d'activit\'e -- pipeline d'ingestion}
+Ce diagramme mod\'elise le processus d'ingestion du contenu, en amont de toute interaction avec un utilisateur. \textbf{Changement structurel depuis v3}~: la bifurcation \guillemotleft~type de contenu~?~\guillemotright\ figurait en v3 comme deux branches d'un m\^eme flux forc\'e/joint. En r\'ealit\'e, six semaines d'impl\'ementation ont montr\'e qu'il s'agit de \textbf{deux processus ind\'ependants}, d\'eclench\'es diff\'eremment (l'un par le scraping, \`a la demande ou en historique complet ; l'autre par une t\^ache planifi\'ee quotidienne) -- la figure ci-dessous le repr\'esente d\'esormais comme tel plut\^ot que par un faux parall\'elisme.
+
+\diagfig{images/uml_activite.png}{Pipeline d'ingestion, de la collecte \`a l'indexation}{fig:activite}
+
+\subsection*{Analyse}
+La colonne A (pipeline documentaire) reprend le chemin texte de v3 \`a l'identique (d\'ecoupage $\to$ embeddings $\to$ indexation hybride), avec une collecte \'etendue depuis v3 aux quatre flux de d\'ecouverte r\'eels~: les trois cat\'egories originales plus le flux transversal \guillemotleft~Derni\`eres parutions~\guillemotright\ (30 ao\^ut, n\'ecessaire pour des publications comme \guillemotleft~Chiffres cl\'es~\guillemotright\ qui ne rel\`event d'aucune des trois cat\'egories). Sa branche \guillemotleft~tableau de chiffres~\guillemotright, en revanche, reste grise et point ill\'ee~: c'est le chemin d\'ecrit en v3 mais jamais cod\'e (voir section~\ref{sec:ecarts}). La colonne B (pipeline BDS, nouveau depuis v3) est le v\'eritable chemin d'alimentation de la table \texttt{indicateur} aujourd'hui~: un appel planifi\'e quotidien qui met \`a jour les indicateurs cur\'es par upsert. Les deux colonnes ne se synchronisent pas~: elles alimentent la m\^eme base ind\'ependamment, chacune interrog\'ee en lecture par un module diff\'erent (RetrievalReranker pour A, LookupStructure pour B).
+
+\section{\'Ecarts assum\'es entre conception et impl\'ementation r\'eelle}\label{sec:ecarts}
+Par souci de rigueur -- et parce que le projet a fait de l'observation en conditions r\'eelles sa discipline centrale (voir JOURNAL.md) -- cette section documente explicitement ce qui a \'et\'e con\c{c}u dans les dossiers de conception successifs mais n'a jamais \'et\'e c\^abl\'e dans le code, plut\^ot que de le laisser silencieusement dispara\^itre des diagrammes.
+
+\begin{itemize}
+\item \textbf{\texttt{ConstructeurIndicateurs.structurer(tableaux)}} (repli PDF/XLSX pour les indicateurs, chemin gris pointill\'e des figures~\ref{fig:classes} et~\ref{fig:activite})~: la m\'ethode existe dans le code mais l\`eve syst\'ematiquement \texttt{NotImplementedError}. D\'eclar\'e hors p\'erim\`etre \`a priorit\'e basse dans \texttt{TODO.md} d\`es que l'API BDS a couvert la majorit\'e des indicateurs cibl\'es (ADR 0004) -- ce n'est pas un bug, c'est un arbitrage de p\'erim\`etre assum\'e et trac\'e.
+\item \textbf{Repli \guillemotleft~\`a la demande~\guillemotright\ vers l'API BDS} (\guillemotleft~Figure A~\guillemotright\ de \texttt{complement\_conception\_bds.pdf}, section~3)~: ce document, r\'edig\'e le 15 juillet suite \`a l'ADR 0004, d\'ecrit une cascade \`a trois niveaux dans \texttt{LookupStructure} (cache local $\to$ recherche d'un code plausible dans le catalogue $\to$ appel direct \`a l'API avec \'ecriture en retour). Seul le premier niveau (lecture du cache local, aliment\'e par le pr\'e-remplissage nocturne -- colonne B de la figure~\ref{fig:activite}) est r\'eellement impl\'ement\'e~: \texttt{src/lookup\_structure.py} n'importe jamais \texttt{src/bds\_client.py}. Le pr\'e-remplissage nocturne (\guillemotleft~Figure B~\guillemotright\ du m\^eme document) est, lui, pleinement impl\'ement\'e et valid\'e \`a grande \'echelle (35561 lignes upsert\'ees, 21 juillet -- voir TODO.md).
+\end{itemize}
+
+Cons\'equence pratique~: si une question chiffr\'ee porte sur un indicateur absent des 18 codes cur\'es pr\'e-remplis, le syst\`eme ne tente aujourd'hui aucun appel API en direct -- il retombe sur le chemin NOTION (recherche textuelle), comme document\'e dans le repli \guillemotleft~chiffre $\to$ notion~\guillemotright\ d\'ej\`a pr\'esent en v3 (voir figure~\ref{fig:seqchiffre}, note de \texttt{scripts/poser\_question.py}).
+
+\section{Synth\`ese}
+Ce dossier v4 couvre les m\^emes angles qu'en v3 (p\'erim\`etre fonctionnel, donn\'ees relationnelles, architecture logicielle, comportement dynamique, pr\'eparation des donn\'ees), pr\'ec\'ed\'es d\'esormais d'une vue d'ensemble de l'architecture (figure~\ref{fig:archi}) et compl\'et\'es par un diagramme suppl\'ementaire pour le troisi\`eme chemin de traitement (MIXTE, figure~\ref{fig:seqmixte}) apparu en cours de d\'eveloppement. La s\'eparation stricte entre traitement du texte et traitement des donn\'ees chiffr\'ees, fil conducteur de v3, demeure intacte~; ce qui a \'evolu\'e est ce qui alimente chacun des deux c\^ot\'es (API BDS plut\^ot qu'extraction de tableaux) et ce qui les entoure d\'esormais (m\'emoire conversationnelle, reformulation). La section~\ref{sec:ecarts} assume explicitement l'\'ecart entre ce qui avait \'et\'e con\c{c}u pour l'int\'egration BDS et ce qui a effectivement \'et\'e c\^abl\'e -- un choix de p\'erim\`etre document\'e plut\^ot qu'une r\'egression cach\'ee. Ce dossier, avec le compl\'ement BDS et le journal de bord, constitue la base documentaire du rapport de stage.
+
+\end{document}
