@@ -382,6 +382,7 @@ visuel des graphiques).
 - [x] Flux "Dernières parutions" (`hcp.ma/downloads/?tag=`) ajouté au Scraper —
       comble un trou de couverture réel (publications transversales type "Chiffres
       clés", non rattachées à un seul sous-thème). Voir JOURNAL.md 30 août.
-- [ ] Garde-fou anti-texte-illisible avant chunking (documents à mise en page dense/
+- [x] Garde-fou anti-texte-illisible avant chunking (documents à mise en page dense/
       police legacy non détectable a priori) — trouvé un cas déjà en base (document
-      #75, symboles bruts indexés). Pas encore implémenté, voir JOURNAL.md 30 août.
+      #75, symboles bruts indexés). Implémenté le 03/09 dans `src/extracteur.py`
+      (heuristique ratio de lettres par page PDF), voir JOURNAL.md 03/09.

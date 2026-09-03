@@ -1526,3 +1526,37 @@ assumees et expliquees directement dans `scripts/mesurer_fiabilite.py` (pas cach
 
 Commit a faire (routeur + lookup_structure + tests + script de mesure) -- push GitHub
 toujours a faire par Ayman lui-meme.
+
+## 3 septembre 2026 (suite) -- rapport de stage mis a jour avec le vrai resultat NF2
+
+Section "Fiabilite mesuree" du rapport entierement reecrite avec le resultat reel
+(28/30, 93,3%, objectif atteint), plutot que la version placeholder precedente.
+Paragraphes de renvoi (Sprint 4 section 14.2, intro Sprint 5) et tableau Bilan mis a
+jour en consequence. Compteurs de tests reconcilies dans tout le document : 220 partout
+ou le texte decrit l'etat actuel (section "Couverture par les tests automatises",
+Annexe B), sauf le recit historique du Bug 4 (31 aout) qui reste a 211 -- exact au
+moment decrit, pas une erreur a corriger. Recompile (3 passes pdflatex) : 38 pages,
+aucune reference non definie, aucun label duplique (seul un avertissement pdfTeX
+cosmetique sur les ancres de page, sans effet). Verification du texte extrait confirme
+que les 4 mentions du resultat NF2 sont coherentes entre elles.
+
+## 3 septembre 2026 (suite) -- garde-fou anti-texte-illisible implemente (item backlog)
+
+Implemente le garde-fou anti-texte-illisible avant chunking, en attente depuis le 30
+aout (voir TODO.md, cas reel trouve : document #75 "Les Cahiers du Plan N 33", police
+arabe legacy, 9 chunks de symboles bruts deja indexes dans Chroma/BM25).
+
+Heuristique choisie dans `src/extracteur.py` (`_texte_lisible`) : dans un texte
+francais normal, la grande majorite des caracteres non-espace sont des lettres --
+un texte issu d'un mauvais mapping de police tombe nettement en dessous. Seuil a 50%
+de caracteres alphabetiques, applique page par page dans `_extraire_pdf` uniquement
+(le texte narratif destine au chunking) ; les tableaux de la meme page restent extraits
+normalement, le probleme de police n'affecte pas leur structure. Pages trop courtes
+(<30 caracteres non-espace) conservees par defaut, faute de signal suffisant pour
+trancher.
+
+4 tests ajoutes dans `tests/test_extracteur.py` : l'heuristique seule (texte francais
+normal accepte, symboles bruts rejetes, texte court conserve par defaut), plus un test
+d'integration sur `_extraire_pdf` avec `pdfplumber.open` mocke (deux pages, une normale
+une illisible) verifiant que la page illisible est exclue du texte mais que son tableau
+reste extrait. Suite complete : 224/224.

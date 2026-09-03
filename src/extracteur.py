@@ -17,6 +17,39 @@ from .models import Document
 
 Tableau = list[list[str]]
 
+# Garde-fou anti-texte-illisible (ajoute le 03/09, voir JOURNAL.md 30 aout et
+# TODO.md) : certains PDF a mise en page dense ou police legacy (ex. document #75,
+# "Les Cahiers du Plan N 33", police arabe legacy) font ressortir de pdfplumber du
+# texte qui n'est pas du texte -- des symboles/glyphes bruts sans rapport avec le
+# contenu reel (deja trouve 9 chunks de ce type indexes dans Chroma/BM25 avant ce
+# correctif). Rien ne signale ce cas a priori (pas d'erreur, pas d'exception -- juste
+# une chaine de caracteres qui a la forme d'un texte) : le seul moyen de le detecter
+# est heuristique, sur la forme du texte extrait lui-meme.
+#
+# Heuristique choisie : dans un texte francais normal, la grande majorite des
+# caracteres non-espace sont des lettres (accents compris) -- le reste (chiffres,
+# ponctuation) reste minoritaire. Un texte illisible issu d'un mauvais mapping de
+# police tombe nettement en dessous de ce ratio (glyphes/symboles qui ne sont pas
+# des lettres au sens Unicode). Seuil choisi large (0.5) pour eviter de rejeter a
+# tort une page dense en chiffres/tableaux legitime -- vise seulement le cas net de
+# symboles bruts, pas un simple appauvrissement de texte.
+SEUIL_RATIO_ALPHA = 0.5
+# Sous ce nombre de caracteres, la mesure n'est pas fiable (trop peu de signal) --
+# la page est conservee par defaut plutot que rejetee sur un echantillon trop court.
+LONGUEUR_MIN_MESURE = 30
+
+
+def _texte_lisible(texte: str) -> bool:
+    """Retourne False si `texte` ressemble a des symboles/glyphes bruts plutot qu'a
+    du texte reel (voir SEUIL_RATIO_ALPHA ci-dessus). Une chaine vide ou trop courte
+    est consideree lisible par defaut (rien a rejeter, pas assez de signal)."""
+    caracteres_non_espace = [c for c in texte if not c.isspace()]
+    if len(caracteres_non_espace) < LONGUEUR_MIN_MESURE:
+        return True
+    nb_alpha = sum(1 for c in caracteres_non_espace if c.isalpha())
+    ratio_alpha = nb_alpha / len(caracteres_non_espace)
+    return ratio_alpha >= SEUIL_RATIO_ALPHA
+
 
 class Extracteur:
     """Extrait le texte propre et les tableaux de chiffres d'un Document brut."""
@@ -69,8 +102,13 @@ class Extracteur:
         with pdfplumber.open(chemin_fichier) as pdf:
             for page in pdf.pages:
                 texte_page = page.extract_text()
-                if texte_page:
+                if texte_page and _texte_lisible(texte_page):
                     morceaux_texte.append(texte_page)
+                # Page rejetee silencieusement si illisible (voir _texte_lisible) :
+                # ses eventuels tableaux restent extraits normalement ci-dessous --
+                # le garde-fou ne vise que le texte narratif destine au chunking, pas
+                # les tableaux de chiffres (structure differente, propre a
+                # ConstructeurIndicateurs, jamais concernee par ce probleme de police).
 
                 for table in page.extract_tables():
                     lignes = [
