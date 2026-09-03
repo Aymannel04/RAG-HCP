@@ -37,6 +37,23 @@ def test_classifier_questions_chiffrees_formulations_completees_le_28_07(routeur
 
 
 @pytest.mark.parametrize("question", [
+    # Regression du 03/09 : trouvees en construisant le jeu de test de fiabilite
+    # (scripts/mesurer_fiabilite.py, voir JOURNAL.md) -- questions chiffrees reelles,
+    # reprenant les noms d'indicateurs cures presque mot pour mot, qui tombaient
+    # quand meme a tort sur NOTION faute de mot-cle correspondant.
+    "indice synthétique de fécondité",
+    "produit intérieur brut aux prix courants",
+    "exportations de biens et services",
+    "importations",
+    "taux net d'activité",
+    "population urbaine du Maroc",
+    "valeur ajoutée de l'agriculture",
+])
+def test_classifier_questions_chiffrees_formulations_completees_le_03_09(routeur, question):
+    assert routeur.classifier(question) == TypeQuestion.CHIFFRE
+
+
+@pytest.mark.parametrize("question", [
     "C'est quoi le RGPH ?",
     "Pourquoi le chômage a-t-il augmenté ces derniers trimestres ?",
     "Comment est calculé l'indice des prix à la consommation ?",

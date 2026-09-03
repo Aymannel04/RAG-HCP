@@ -108,6 +108,12 @@ MOTS_CHIFFRE = [
     "part de", "part des", "proportion de", "proportion des",
     "effectif de", "effectif des", "espérance de vie", "valeurs ajoutées",
     "population de", "population du",
+    # Ajouts du 03/09 (limites réelles trouvées en construisant le jeu de test de
+    # fiabilité, voir JOURNAL.md) : questions chiffrées légitimes qui ne matchaient
+    # aucun mot-clé ci-dessus, donc retombaient par défaut sur NOTION.
+    "indice synthétique", "produit intérieur brut", "exportations de",
+    "exportations des", "importations", "taux net", "population urbaine",
+    "population rurale", "valeur ajoutée",
 ]
 
 # Question chiffrée sans mot-outil explicite mais avec une année/période -- signal plus

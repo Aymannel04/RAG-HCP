@@ -1440,9 +1440,89 @@ NOTION variees (causes du chomage, "Maroc 2030", note de conjoncture, chiffres c
 2026, comptes regionaux, "echange des stock") : toutes correctement sourcees, et le
 systeme refuse honnetement quand le contexte ne contient pas la reponse (ex. "non mais
 pourquoi on a ces problemes ?", "echange des stock" -> refus explicite plutot
-qu'invention). Point mineur note, pas un bug bloquant : la question hors-sujet "un bon
-citoyen c'est quoi ?" a recu une reponse etiree a partir d'un document sans rapport
-direct plutot qu'un refus net -- a surveiller, pas traite dans l'immediat.
+qu'invention). Point releve puis reexamine : la question hors-sujet "un bon citoyen
+c'est quoi ?" a recu une reponse construite a partir d'un document reel (vision 2015 du
+systeme educatif) avec sa source citee -- pas une invention, juste le passage le plus
+proche trouve pour une question hors du champ statistique habituel. Comportement de
+grounding correct, retire de la liste des points a surveiller.
 
-Commit local a faire (regroupe le correctif Bug 5 + le test) -- push GitHub toujours a
-faire par Ayman lui-meme.
+Commit local fait (`61333c8`, correctif Bug 5 + test) -- push GitHub toujours a faire
+par Ayman lui-meme.
+
+## 3 septembre 2026 (suite) -- jeu de test de fiabilite (NF2), 2 bugs reels trouves en le construisant
+
+Retour au projet apres validation du Bug 5. Construction du jeu de test de fiabilite
+prevu au cadrage (NF2 : >= 90% d'exactitude sur les questions chiffrees), backlog
+Sprint 4/5 jamais fait jusqu'ici.
+
+**Methode** : 30 questions en langage naturel couvrant les 18 indicateurs cures
+(`data/indicateurs_cures.py`), plusieurs ventilations (sexe/milieu/region/diplome),
+une paraphrase, et 5 cas volontairement ambigus/hors-perimetre dont le SEUL
+comportement correct est de refuser. Chaque valeur attendue verifiee manuellement
+contre la vraie base (`data/hcp_rag.db`) par une requete SQL independante de
+`LookupStructure` -- jamais en reutilisant le module teste pour generer sa propre
+reference (aurait ete circulaire). Script : `scripts/mesurer_fiabilite.py`. Comme le
+chemin CHIFFRE n'appelle jamais Mistral (gabarit deterministe), tout le benchmark
+tourne 100% hors-ligne, sans avoir besoin d'un acces reseau -- executable directement
+dans le bac a sable, contrairement au reste de l'app.
+
+**Premiere execution : 19/30 (63,3%), sous l'objectif.** Diagnostic ligne par ligne
+(pas suppose que le jeu de test avait raison par defaut) :
+
+- **Bug 6 reel -- 6 questions chiffrees legitimes mal routees vers NOTION.**
+  "indice synthetique de fecondite", "produit interieur brut aux prix courants/
+  constants", "exportations de biens et services", "importations", "taux net
+  d'activite", "population urbaine du Maroc" ne matchaient AUCUN mot-cle de
+  `MOTS_CHIFFRE` (`src/routeur.py`) -- meme classe de limite que celle deja corrigee le
+  28/07, cette fois sur des formulations qui collent pourtant presque mot pour mot aux
+  vrais noms d'indicateurs cures. Corrige en completant `MOTS_CHIFFRE` avec les
+  tournures manquantes ("indice synthetique", "produit interieur brut", "exportations
+  de/des", "importations", "taux net", "population urbaine/rurale", "valeur ajoutee").
+  7 nouveaux tests dans `tests/test_routeur.py`.
+
+- **Bug 7 reel -- tokens d'une seule lettre creant de fausses egalites.**
+  "combien de chomeurs y a-t-il ?" (routee CHIFFRE, correctement) ne trouvait pourtant
+  pas "Effectif des chomeurs" : la contraction "a-t-il" produit les tokens "a" et "t",
+  jamais filtres par `MOTS_OUTILS` (`src/lookup_structure.py`), qui creaient une
+  egalite de score parasite avec d'autres indicateurs partageant par hasard un token
+  d'une lettre. Corrige : `_tokeniser` exclut desormais tout token d'une seule lettre,
+  et "il" ajoute explicitement a `MOTS_OUTILS` (3 lettres, pas couvert par la regle de
+  longueur). 1 nouveau test dans `tests/test_lookup_structure.py`.
+
+- **2 erreurs dans le jeu de test lui-meme, pas dans le code** (a corriger la
+  distinction est le but meme de la discipline de ce projet) : (1) "taux de chomage des
+  femmes en milieu urbain" suppose a tort qu'aucune ventilation croisee n'existait pour
+  I4001 -- verifie en base, "Urbain, Feminin" existe reellement (26,0% en 2025), le
+  systeme repondait deja correctement, seule l'attente du test etait fausse. (2)
+  "combien de chomeurs y a-t-il **au Maroc** ?" -- une fois le Bug 7 corrige, cette
+  formulation tombe sur une ambiguite REELLE et distincte (le mot "Maroc" est aussi
+  present dans le nom de "Population du Maroc...", egalite legitime a score 1, refus
+  correct) : corrige en simplifiant la question ("combien de chomeurs y a-t-il ?"),
+  pas en modifiant le code.
+
+**1 limite reelle documentee, volontairement non corrigee dans l'immediat** :
+"taux de chomage a Marrakech-Safi" renvoie 13,0% (l'agregat national, I4001) au lieu de
+8,1% (la vraie valeur regionale, I3287). Cause : I4001 et I3287 partagent exactement le
+meme score et les memes mots correspondants ({taux, chomage}), donc la regle d'egalite
+du Bug 2 (30/08 -- "meme mots correspondants = simple ventilation du meme indicateur,
+accepter sans ambiguite") les traite a tort comme deux ventilations d'UN SEUL
+indicateur, alors que ce sont deux indicateurs BDS reellement distincts qui se
+ressemblent. Corriger proprement demanderait de fusionner le matching du nom et le
+matching de la dimension en une seule decision (verifier qu'un candidat peut vraiment
+satisfaire la dimension demandee avant de le retenir), pas un correctif ponctuel --
+laisse en echec assume dans le jeu de test plutot que rafistole a la hate. Meme
+diagnostic pour "valeur ajoutee de l'agriculture" (echec residuel, second passage) :
+"valeur"/"ajoutee" (singulier, dans la question) ne matchent jamais "valeurs"/
+"ajoutees" (pluriel, dans le nom BDS) -- tokenizer sans lemmatisation, limite connue et
+assumee (voir docstring `MOTS_OUTILS`, "pas une liste NLP complete"), pas corrigee non
+plus pour la meme raison (risque de regression sur d'autres accords singulier/pluriel
+si corrige au cas par cas).
+
+**Suite complete apres corrections : 220/220 tests.**
+
+**Deuxieme execution du jeu de test de fiabilite : 28/30 (93,3%) -- objectif NF2
+(>= 90%) ATTEINT.** Les 2 echecs restants sont les deux limites documentees ci-dessus,
+assumees et expliquees directement dans `scripts/mesurer_fiabilite.py` (pas cachees).
+
+Commit a faire (routeur + lookup_structure + tests + script de mesure) -- push GitHub
+toujours a faire par Ayman lui-meme.

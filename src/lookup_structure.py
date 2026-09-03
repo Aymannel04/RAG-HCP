@@ -140,10 +140,18 @@ def _normaliser_accents(texte: str) -> str:
 # Mots-outils français exclus du calcul de recouvrement (voir docstring de module).
 # Volontairement courte : seulement ce qui apparaît réellement dans les noms
 # d'indicateurs BDS et dans des questions naturelles, pas une liste NLP complète.
+#
+# "il" ajouté le 03/09 (bug réel trouvé en construisant le jeu de test de fiabilité,
+# voir JOURNAL.md) : "combien de chômeurs y a-t-il au Maroc ?" ne matchait plus
+# "Effectif des chômeurs" -- le token "il" (issu de "a-t-il") créait une fausse égalité
+# de score avec d'autres indicateurs sans rapport (ex. "Espérance de vie...") qui
+# partagent par hasard un token bruit d'une seule lettre. Voir aussi `_tokeniser`
+# ci-dessous, qui filtre désormais tous les tokens d'une seule lettre ("a", "y", "t"),
+# même cause racine.
 MOTS_OUTILS = {
     "le", "la", "les", "l", "un", "une", "des", "de", "du", "d", "et", "en", "au", "aux",
     "est", "sont", "quel", "quelle", "quels", "quelles", "ce", "cette", "ces", "pour",
-    "sur", "dans", "actuel", "actuelle", "selon", "par",
+    "sur", "dans", "actuel", "actuelle", "selon", "par", "il",
 }
 
 PATTERN_ANNEE = re.compile(r"\b((?:19|20)\d{2})\b")
@@ -402,8 +410,14 @@ class LookupStructure:
 
     @staticmethod
     def _tokeniser(texte: str) -> set[str]:
+        """Corrige le 03/09 : les tokens d'une seule lettre ("a", "y", "t" -- issus par
+        exemple de contractions comme "a-t-il") sont désormais exclus au même titre que
+        MOTS_OUTILS. Un token d'une lettre n'a jamais de valeur discriminante pour
+        identifier un indicateur, mais peut créer une fausse égalité de score avec un
+        indicateur sans rapport qui le contient par hasard (voir MOTS_OUTILS, note
+        "il" ajouté le 03/09, même bug réel)."""
         tokens = re.findall(r"\w+", _normaliser_accents(texte.lower()))
-        return {t for t in tokens if t not in MOTS_OUTILS}
+        return {t for t in tokens if t not in MOTS_OUTILS and len(t) > 1}
 
     @classmethod
     def _resoudre_ventilation(

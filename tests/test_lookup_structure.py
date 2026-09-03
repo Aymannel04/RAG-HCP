@@ -161,6 +161,32 @@ def test_rechercher_indicateur_match_ambigu_sur_2_mots_communs_entre_sujets_sans
     assert resultat is None
 
 
+def test_rechercher_indicateur_tokens_dune_lettre_ne_creent_pas_de_fausse_ambiguite(conn):
+    # Regression reelle (03/09, trouvee en construisant le jeu de test de fiabilite,
+    # voir JOURNAL.md) : "combien de chomeurs y a-t-il ?" contient les tokens bruit "a"
+    # et "t" (issus de la contraction "a-t-il"). Avant le correctif, ces tokens d'une
+    # seule lettre n'etaient pas filtres et pouvaient creer une fausse egalite de score
+    # avec un indicateur totalement sans rapport (verifie manuellement : la variante
+    # "...au Maroc ?" tombe sur une ambiguite REELLE et distincte, le mot "Maroc" lui-
+    # meme etant partage avec "Population du Maroc..." -- comportement attendu du
+    # systeme, pas un bug, cf. principe general "refuser plutot que deviner" ; non
+    # teste ici pour cette raison).
+    _peupler_indicateurs_realistes(conn)
+    id_doc = _document_synthetique(conn)
+    inserer_indicateur(conn, Indicateur(
+        id_indicateur=None, nom="Effectif des chômeurs", valeur=1621.0, unite="milliers",
+        periode="2025", region=None, id_document=id_doc, code_bds="I2868",
+    ))
+
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        "combien de chômeurs y a-t-il ?"
+    )
+
+    assert resultat is not None
+    assert resultat.nom == "Effectif des chômeurs"
+    assert resultat.valeur == 1621.0
+
+
 def test_rechercher_indicateur_sans_accents_matche_quand_meme(conn):
     # Regression : "chomage" tape sans accent ne correspondait pas a "chômage" en
     # base -- faisait basculer a tort sur RetrievalReranker au lieu de la reponse
