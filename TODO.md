@@ -385,4 +385,8 @@ visuel des graphiques).
 - [x] Garde-fou anti-texte-illisible avant chunking (documents à mise en page dense/
       police legacy non détectable a priori) — trouvé un cas déjà en base (document
       #75, symboles bruts indexés). Implémenté le 03/09 dans `src/extracteur.py`
-      (heuristique ratio de lettres par page PDF), voir JOURNAL.md 03/09.
+      (heuristique ratio de lettres par page PDF), voir JOURNAL.md 03/09. Détecte et
+      exclut, ne corrige pas — traiter réellement ce type de document (ex. "Chiffres
+      clés, 2026") nécessiterait l'OCR (rendu image + Tesseract), piste identifiée
+      mais volontairement non implémentée (coût/risque trop élevé pour un cas isolé
+      en fin de stage), voir note dans `src/extracteur.py`.

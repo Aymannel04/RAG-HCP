@@ -38,6 +38,17 @@ SEUIL_RATIO_ALPHA = 0.5
 # la page est conservee par defaut plutot que rejetee sur un echantillon trop court.
 LONGUEUR_MIN_MESURE = 30
 
+# Limite connue et assumee : ce garde-fou detecte et exclut le texte illisible, il ne
+# le corrige pas -- le document reste dans le corpus mais sans son texte narratif
+# (ex. "Chiffres cles, 2026", brochure dense bilingue AR/EN, testee le 30 aout : deja
+# illisible pour pdfplumber avant meme ce correctif). Piste de solution identifiee
+# mais non implementee (cout/risque juges trop eleves pour un cas isole en fin de
+# stage) : rendre chaque page en image et passer par un moteur OCR (ex. Tesseract) au
+# lieu de lire les codes de caracteres du PDF -- contournerait le mauvais mapping de
+# police en lisant les glyphes visuellement, comme le ferait un humain. A explorer si
+# ce type de document devient frequent dans le corpus.
+
+
 
 def _texte_lisible(texte: str) -> bool:
     """Retourne False si `texte` ressemble a des symboles/glyphes bruts plutot qu'a

@@ -1560,3 +1560,13 @@ normal accepte, symboles bruts rejetes, texte court conserve par defaut), plus u
 d'integration sur `_extraire_pdf` avec `pdfplumber.open` mocke (deux pages, une normale
 une illisible) verifiant que la page illisible est exclue du texte mais que son tableau
 reste extrait. Suite complete : 224/224.
+
+Precision importante, discutee avec Ayman : ce garde-fou detecte et exclut le texte
+illisible, il ne le corrige pas -- "Chiffres cles, 2026" (brochure dense bilingue
+AR/EN, testee le 30 aout) reste donc sans texte narratif exploitable. Vraie solution
+identifiee : rendre chaque page en image et passer par un moteur OCR (Tesseract) plutot
+que de lire les codes de caracteres du PDF -- contournerait le mauvais mapping de
+police en lisant les glyphes visuellement. Decision prise de ne PAS l'implementer
+maintenant (nouvelle dependance systeme, gain incertain sur un document dense
+bilingue avec tableaux entremeles, cas isole en fin de stage) -- documentee comme
+limite connue avec piste de solution (`src/extracteur.py`, `TODO.md`).
