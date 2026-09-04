@@ -89,6 +89,15 @@ Backlog :
       question+ventilation retombent en ambiguïté refusée face à un indicateur BDS
       existant sans rapport -- même classe que la limite Marrakech-Safi déjà connue,
       voir JOURNAL.md 03/09.
+- [x] Tentative de généraliser `structurer` à tout fichier Excel du HCP (pas
+      seulement le format EMO) -- abandonnée après vérification concrète : le format
+      "Annuaire Statistique du Maroc" (26 éditions dispo) s'est avéré être une archive
+      de 23 fichiers × jusqu'à 34 feuilles, mise en page bilingue pour l'impression,
+      sans dictionnaire ni structure programmatique. Pas de format unique chez le HCP,
+      donc pas de parseur générique universel possible sans risquer une mauvaise
+      lecture silencieuse. Limite assumée et documentée (voir JOURNAL.md 03/09) : seul
+      le format EMO est reconnu automatiquement pour l'instant, les autres formats
+      renvoient [] (refus propre) plutôt qu'une tentative risquée.
 - [x] Support DOCX ajouté (ADR 0005, décision prise avec Ayman le 17/07 : étendre plutôt
       qu'accepter le trou) : `Scraper` détecte/télécharge/valide les `.docx` (même
       schéma que PDF/XLSX, `/attachment/{id}/` sans extension visible dans le href) ;

@@ -16,6 +16,15 @@ son complément (docs/complement_conception_bds.pdf) :
   volontairement restreinte) : si ce motif n'est pas reconnu, `structurer` renvoie une
   liste vide plutôt que d'inventer une interprétation, ce qui la rend sûre à appeler
   systématiquement dans le pipeline d'indexation, quel que soit le document.
+
+  Généralisation à tout Excel du HCP envisagée puis abandonnée après vérification
+  concrète (voir JOURNAL.md, 03/09) : il n'existe pas un format Excel unique chez le
+  HCP. Ex. l'"Annuaire Statistique du Maroc" est une archive de 23 fichiers x jusqu'à
+  34 feuilles, mise en page bilingue FR/AR pour l'impression, sans dictionnaire ni
+  structure programmatique -- rien à voir avec le motif ci-dessus. Écrire un parseur
+  générique universel risquerait une mauvaise lecture silencieuse sur ces formats,
+  contraire au principe fondateur du projet (ADR 0001). Seul le format EMO est donc
+  reconnu pour l'instant ; les autres renvoient [] plutôt qu'une tentative risquée.
 """
 from __future__ import annotations
 

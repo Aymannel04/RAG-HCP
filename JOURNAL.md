@@ -1558,6 +1558,36 @@ qui n'est pas encore exploitable sur toutes les formulations possibles. Le cas s
 Suite complete : 230/230 (6 tests ajoutes -- 5 sur `structurer`, 1 d'integration sur
 `indexer_document`).
 
+## 3 septembre 2026 (suite) -- tentative de generaliser a tout fichier Excel du HCP : abandonnee, limite assumee
+
+Question posee (Ayman) : peut-on generaliser `structurer` pour traiter automatiquement
+N'IMPORTE QUEL fichier Excel publie par le HCP, pas seulement le format EMO deja
+reconnu ? Verifie concretement plutot que de supposer : parcouru hcp.ma (navigateur) et
+telecharge/ouvert en reel deux familles de XLSX pour comparer leur structure.
+
+- Format EMO (deja traite, voir entree precedente) : dictionnaire Code/Nom/Unite +
+  table de donnees en colonnes -- structure programmatique, simple a reconnaitre.
+- "Annuaire Statistique du Maroc" (26 editions disponibles, 2015-2025) : telecharge et
+  ouvert le fichier 2025 reel (`https://www.hcp.ma/file/248151/`) -- c'est en fait une
+  archive ZIP de 23 fichiers Excel distincts (un par theme : Sante, Emploi et salaires,
+  Justice, Environnement...), chacun contenant jusqu'a 34 feuilles. Ouvert une feuille
+  reelle dedans (Emploi et salaires, feuille "T1Total F") : aucun dictionnaire, mise en
+  page pensee pour l'impression/lecture humaine -- titres bilingues FR/AR sur plusieurs
+  lignes avant les donnees ("EMPLOI"/"التشغيل", puis numero+titre du tableau, puis
+  unite, puis annee, puis enfin les vrais en-tetes de colonnes), deux langues melangees
+  dans les memes colonnes.
+
+Conclusion : pas de format unique chez le HCP, donc pas de parseur unique possible sans
+risquer une mauvaise lecture silencieuse (colonne mal alignee, titre pris pour une
+valeur...) sur les formats non prevus -- exactement le risque que le principe fondateur
+du projet (ADR 0001, zero hallucination sur les chiffres) cherche a eviter. Decision :
+abandonner l'idee d'un parseur generique universel, garder l'approche actuelle
+(reconnaitre un motif precis, renvoyer [] et refuser plutot que mal interpreter un
+format non reconnu), et etendre au cas par cas si un nouveau format frequent est
+identifie plus tard. Le format Annuaire, plus riche mais aussi plus risque a traiter,
+reste hors perimetre pour l'instant -- limite assumee et documentee, pas contournee en
+douce.
+
 **Suite complete apres corrections : 220/220 tests.**
 
 **Deuxieme execution du jeu de test de fiabilite : 28/30 (93,3%) -- objectif NF2
