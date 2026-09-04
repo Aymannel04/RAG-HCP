@@ -154,6 +154,91 @@ def test_structurer_depuis_bds_ids_modalite_joints_par_point():
     assert par_region["Urbain, 15-24 ans, Feminin"] == 28.3  # aucune dimension agregee
 
 
+# --- Chemin repli PDF/XLSX (ConstructeurIndicateurs.structurer) : motif dictionnaire
+# Code/Nom/Unité + table de données au format large, voir docstring de module. Reproduit
+# en miniature la structure réelle de data/raw/248688.xlsx ("Principaux indicateurs
+# trimestriels rétropolés..., méthodologie EMO").
+
+TABLEAU_DICTIONNAIRE = [
+    ["Code", "Nom", "Unité"],
+    ["AN", "Année", "-"],
+    ["TRIM", "Trimestre", "-"],
+    ["TX.CH.STR", "Taux de chômage strict", "%"],
+    ["TX.CH.STR.U", "Taux de chômage strict, Urbain", "%"],
+    ["TX.CH.STR.F", "Taux de chômage strict, Femmes", "%"],
+]
+
+TABLEAU_DONNEES = [
+    ["AN", "TRIM", "TX.CH.STR", "TX.CH.STR.U", "TX.CH.STR.F"],
+    ["2025", "3", "11.9", "15.8", "20.9"],
+    ["2025", "4", "11.5", "15.3", "20.4"],
+]
+
+
+def test_structurer_reconnait_le_motif_dictionnaire_et_construit_les_indicateurs():
+    resultats = ConstructeurIndicateurs().structurer(
+        id_document=100, tableaux=[TABLEAU_DICTIONNAIRE, TABLEAU_DONNEES]
+    )
+
+    par_cle = {(r.nom, r.region, r.periode): r for r in resultats}
+    assert par_cle[("Taux de chômage strict", None, "2025T4")].valeur == 11.5
+    assert par_cle[("Taux de chômage strict", "Urbain", "2025T4")].valeur == 15.3
+    assert par_cle[("Taux de chômage strict", "Femmes", "2025T4")].valeur == 20.4
+    assert par_cle[("Taux de chômage strict", None, "2025T3")].valeur == 11.9
+
+    for r in resultats:
+        assert r.unite == "%"
+        assert r.id_document == 100
+        assert r.code_bds is None  # jamais issu de l'API BDS
+
+
+def test_structurer_gere_une_periode_sans_trimestre():
+    dictionnaire = [
+        ["Code", "Nom", "Unité"],
+        ["AN", "Année", "-"],
+        ["POP", "Population du Maroc", "Millier"],
+    ]
+    donnees = [["AN", "POP"], ["2024", "37000"]]
+
+    resultats = ConstructeurIndicateurs().structurer(id_document=1, tableaux=[dictionnaire, donnees])
+
+    assert len(resultats) == 1
+    assert resultats[0].periode == "2024"  # pas de "T..." si aucune colonne Trimestre
+    assert resultats[0].valeur == 37000.0
+
+
+def test_structurer_ignore_les_cellules_vides_ou_non_numeriques():
+    donnees = [
+        ["AN", "TRIM", "TX.CH.STR"],
+        ["2025", "4", ""],  # cellule vide -> ignorée
+        ["2025", "3", "ND"],  # non numérique -> ignorée
+        ["2025", "2", "11.2"],  # valide
+    ]
+
+    resultats = ConstructeurIndicateurs().structurer(
+        id_document=1, tableaux=[TABLEAU_DICTIONNAIRE, donnees]
+    )
+
+    assert len(resultats) == 1
+    assert resultats[0].periode == "2025T2"
+    assert resultats[0].valeur == 11.2
+
+
+def test_structurer_renvoie_liste_vide_si_aucun_motif_dictionnaire_reconnu():
+    # Un tableau "normal" (ex. extrait d'un PDF quelconque, ou la feuille "Avis aux
+    # utilisateurs" d'un XLSX réel) ne doit jamais être mal interprété comme des
+    # indicateurs -- structurer() doit renvoyer [] plutôt qu'inventer.
+    tableau_quelconque = [["Année", "Remarque"], ["2025", "Note méthodologique"]]
+
+    resultats = ConstructeurIndicateurs().structurer(id_document=1, tableaux=[tableau_quelconque])
+
+    assert resultats == []
+
+
+def test_structurer_renvoie_liste_vide_sur_tableaux_vides():
+    assert ConstructeurIndicateurs().structurer(id_document=1, tableaux=[]) == []
+
+
 def test_construire_document_synthetique():
     doc = ConstructeurIndicateurs.construire_document_synthetique(INDICATEUR_JSON_MOCK)
 

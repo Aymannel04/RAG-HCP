@@ -80,6 +80,15 @@ Backlog :
       (données, dictionnaire des codes, note méthodologique), aucune erreur. Note
       précédente ("aucun xlsx dans le corpus") périmée -- ce fichier existait déjà
       dans `data/raw/`, juste jamais testé jusqu'ici.
+- [x] `ConstructeurIndicateurs.structurer` (repli PDF/XLSX) implémenté le 03/09 et
+      branché dans `scripts/indexer_documents.py` -- ce document était collecté mais
+      totalement inerte (0 chunk, 0 indicateur) faute de ce chemin. 1728 lignes
+      structurées et insérées en base à partir du vrai fichier, valeurs vérifiées
+      exactes, aucune régression sur le jeu de fiabilité (toujours 28/30) ni sur la
+      suite de tests (230/230). Limite transparente : certaines combinaisons
+      question+ventilation retombent en ambiguïté refusée face à un indicateur BDS
+      existant sans rapport -- même classe que la limite Marrakech-Safi déjà connue,
+      voir JOURNAL.md 03/09.
 - [x] Support DOCX ajouté (ADR 0005, décision prise avec Ayman le 17/07 : étendre plutôt
       qu'accepter le trou) : `Scraper` détecte/télécharge/valide les `.docx` (même
       schéma que PDF/XLSX, `/attachment/{id}/` sans extension visible dans le href) ;

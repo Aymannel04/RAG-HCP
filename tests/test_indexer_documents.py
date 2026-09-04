@@ -153,3 +153,43 @@ def test_indexer_document_meme_url_deux_fois_ne_duplique_pas_les_chunks(tmp_path
 
     total_chunks = conn.execute("SELECT COUNT(*) FROM chunk").fetchone()[0]
     assert total_chunks == resume1["chunks"]
+
+
+def test_indexer_document_xlsx_avec_motif_reconnu_insere_les_indicateurs(tmp_path, conn, extracteur, indexeur):
+    """Le repli PDF/XLSX (ConstructeurIndicateurs.structurer, voir son module) est
+    appelé automatiquement ici sur tout document non-HTML -- ce test vérifie le
+    branchement bout en bout (extraction -> structuration -> insertion SQLite) sur un
+    XLSX reproduisant le motif réel (dictionnaire Code/Nom/Unité + table de données,
+    voir data/raw/248688.xlsx)."""
+    from openpyxl import Workbook
+
+    classeur = Workbook()
+    feuille_donnees = classeur.active
+    feuille_donnees.title = "Données"
+    feuille_donnees.append(["AN", "TRIM", "TX.CH.STR"])
+    feuille_donnees.append([2025, 4, 11.5])
+
+    feuille_meta = classeur.create_sheet("Métadonnées")
+    feuille_meta.append(["Code", "Nom", "Unité"])
+    feuille_meta.append(["AN", "Année", "-"])
+    feuille_meta.append(["TRIM", "Trimestre", "-"])
+    feuille_meta.append(["TX.CH.STR", "Taux de chômage strict", "%"])
+
+    chemin = tmp_path / "indicateurs_test.xlsx"
+    classeur.save(chemin)
+
+    document = Document(
+        id_document=None, url="https://www.hcp.ma/file/999999/", titre="Indicateurs test",
+        date_publication="2025-11-01", langue="fr", categorie="Marche du travail",
+        type="xlsx", texte_brut=str(chemin),
+    )
+    resume = indexer_document(conn, extracteur, indexeur, document)
+
+    assert resume["statut"] == "ok"
+    assert resume["indicateurs"] == 1
+
+    ligne = conn.execute(
+        "SELECT nom, valeur, unite, periode, region FROM indicateur WHERE id_document = ?",
+        (resume["id_document"],),
+    ).fetchone()
+    assert ligne == ("Taux de chômage strict", 11.5, "%", "2025T4", None)

@@ -1518,6 +1518,46 @@ assumee (voir docstring `MOTS_OUTILS`, "pas une liste NLP complete"), pas corrig
 plus pour la meme raison (risque de regression sur d'autres accords singulier/pluriel
 si corrige au cas par cas).
 
+## 3 septembre 2026 (suite) -- repli PDF/XLSX implemente (ConstructeurIndicateurs.structurer)
+
+En verifiant si un vrai XLSX etait deja dans le corpus (voir entree precedente), trouve
+que `data/raw/248688.xlsx` (id_document 100, "Principaux indicateurs trimestriels
+retropoles..., methodologie EMO") etait deja collecte mais totalement inerte : 0 chunk
+(normal, XLSX = donnee pure) ET 0 indicateur, parce que `ConstructeurIndicateurs.
+structurer` (repli PDF/XLSX) n'etait jamais implemente (`raise NotImplementedError`) ni
+meme branche dans `scripts/indexer_documents.py`. Ses donnees etaient donc invisibles
+au systeme malgre l'extraction fonctionnelle.
+
+Implemente le motif reellement observe dans ce fichier : une feuille dictionnaire
+("Code"/"Nom"/"Unite") + une feuille de donnees au format large (une colonne par code,
+une ligne par periode), le "Nom" portant la ventilation en suffixe apres une virgule
+("Taux de chomage strict, Urbain") quand la colonne est ventilee. Detection heuristique
+(pas de nom de feuille en dur) : renvoie [] si le motif n'est pas reconnu, jamais
+d'exception -- rend l'appel sans risque sur n'importe quel document. Branche dans
+`indexer_document` (scripts/indexer_documents.py), insertion via `inserer_indicateur`
+(upsert deja existant).
+
+Teste sur les vraies donnees : 1728 lignes construites a partir du fichier reel,
+valeurs verifiees identiques a une lecture openpyxl directe (aucune perte de precision).
+Inserees dans data/hcp_rag.db (id_document=100). Jeu de test de fiabilite rejoue apres
+insertion : toujours 28/30 (93,3%), aucune regression sur les 30 cas existants.
+
+Limite trouvee en testant plus loin, transparente : certaines questions combinant
+"chomage strict" a une ventilation (milieu, tranche d'age) tombent en ambiguite
+refusee plutot que resolues -- ex. "taux de chomage strict en milieu urbain" est a
+egalite de score avec l'indicateur BDS existant I4001 (mots differents, {taux,chomage,
+strict} vs {taux,chomage,milieu}), et "... des 15-24 ans" est a egalite avec l'
+indicateur BDS "Taux d'emploi des 15 ans et plus" (sans rapport). Meme classe de
+limite deja documentee pour Marrakech-Safi (matching du nom et de la dimension pas
+encore unifies) -- comportement correct (refus plutot qu'invention), pas une
+regression sur un cas qui marchait avant, juste une nouvelle capacite (donnees EMO)
+qui n'est pas encore exploitable sur toutes les formulations possibles. Le cas simple
+("des femmes", "des hommes") fonctionne et repond avec la vraie valeur (verifie :
+20,4% chomage strict feminin T4 2025, exact).
+
+Suite complete : 230/230 (6 tests ajoutes -- 5 sur `structurer`, 1 d'integration sur
+`indexer_document`).
+
 **Suite complete apres corrections : 220/220 tests.**
 
 **Deuxieme execution du jeu de test de fiabilite : 28/30 (93,3%) -- objectif NF2

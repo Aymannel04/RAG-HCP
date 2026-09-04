@@ -6,10 +6,11 @@ uniquement sur les pièces jointes téléchargeables, jamais sur le HTML de la p
 `indexer_document` filtre `type == "html"` explicitement, voir TODO.md Sprint 2).
 
 Les indicateurs extraits de tableaux PDF/XLSX (`ConstructeurIndicateurs.structurer`)
-restent hors périmètre de ce script : cette méthode n'est pas encore implémentée (voir
-TODO.md, Sprint 2 — repli PDF/XLSX, priorité plus basse depuis que l'ADR 0004 couvre la
-majorité des indicateurs via l'API BDS). Une fois disponible, la brancher ici de la même
-façon que `scripts/preremplir_indicateurs_bds.py` le fait pour la source BDS.
+sont aussi insérés ici, en plus du texte narratif -- `structurer` ne reconnaît qu'un
+motif précis (dictionnaire Code/Nom/Unité + table de données, voir sa docstring) et
+renvoie [] pour tout le reste, donc l'appeler systématiquement sur chaque document est
+sans risque : la plupart des PDF/XLSX ne produiront simplement aucun indicateur par ce
+chemin, l'API BDS (ADR 0004) restant la source primaire pour les 3 catégories ciblées.
 
 Usage prévu (à exécuter sur le PC, ce sandbox n'a pas d'accès réseau vers hcp.ma) :
 
@@ -32,22 +33,31 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from src.base_donnees import connecter, inserer_chunk, inserer_document
+from src.base_donnees import connecter, inserer_chunk, inserer_document, inserer_indicateur
+from src.constructeur_indicateurs import ConstructeurIndicateurs
 from src.extracteur import Extracteur
 from src.indexeur_texte import IndexeurTexte
 from src.models import Document
 
 
-def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, document: Document) -> dict:
+def indexer_document(
+    conn, extracteur: Extracteur, indexeur: IndexeurTexte, document: Document,
+    constructeur: Optional[ConstructeurIndicateurs] = None,
+) -> dict:
     """Traite un `Document` brut déjà collecté par le Scraper : extraction, insertion
-    SQLite, chunking + embeddings + indexation vectorielle/BM25. Retourne un petit
-    résumé (nombre de chunks, etc.) plutôt que de lever en cas de document HTML/vide,
-    pour que l'appelant puisse boucler sur un lot sans tout interrompre.
+    SQLite, chunking + embeddings + indexation vectorielle/BM25, et indicateurs
+    structurés si `ConstructeurIndicateurs.structurer` reconnaît un motif exploitable
+    dans les tableaux extraits. Retourne un petit résumé (nombre de chunks, etc.)
+    plutôt que de lever en cas de document HTML/vide, pour que l'appelant puisse
+    boucler sur un lot sans tout interrompre.
+
+    `constructeur` optionnel (instancié par défaut si absent, même patron
+    qu'`extracteur`/`indexeur`) : simple point d'injection pour les tests.
     """
     if document.type == "html":
         # Jamais indexé (ADR 0003) : la page HTML "vitrine" ne contient pas le vrai
         # contenu, on l'écarte ici avant tout traitement inutile.
-        return {"statut": "ignore_html", "chunks": 0, "tableaux": 0, "id_document": None}
+        return {"statut": "ignore_html", "chunks": 0, "tableaux": 0, "indicateurs": 0, "id_document": None}
 
     # Rafraichissement incremental (bug trouve le 27/08 -- voir JOURNAL.md) :
     # `main()` reinterroge systematiquement la page 1 de chaque listing a chaque
@@ -62,7 +72,7 @@ def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, docu
         "SELECT id_document FROM document WHERE url = ?", (document.url,)
     ).fetchone()
     if deja_connu is not None:
-        return {"statut": "deja_indexe", "chunks": 0, "tableaux": 0, "id_document": deja_connu[0]}
+        return {"statut": "deja_indexe", "chunks": 0, "tableaux": 0, "indicateurs": 0, "id_document": deja_connu[0]}
 
     texte, tableaux = extracteur.extraire(document)
 
@@ -76,10 +86,19 @@ def indexer_document(conn, extracteur: Extracteur, indexeur: IndexeurTexte, docu
             inserer_chunk(conn, chunk)
         chunks_inseres = len(chunks)
 
+    indicateurs_inseres = 0
+    if tableaux:
+        constructeur = constructeur or ConstructeurIndicateurs()
+        indicateurs = constructeur.structurer(id_document, tableaux)
+        for indicateur in indicateurs:
+            inserer_indicateur(conn, indicateur)
+        indicateurs_inseres = len(indicateurs)
+
     return {
         "statut": "ok",
         "chunks": chunks_inseres,
         "tableaux": len(tableaux),
+        "indicateurs": indicateurs_inseres,
         "id_document": id_document,
     }
 
@@ -102,6 +121,7 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
 
     total_documents = 0
     total_chunks = 0
+    total_indicateurs = 0
     nouveaux_documents = 0
 
     try:
@@ -118,11 +138,12 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
                     resume = indexer_document(conn, extracteur, indexeur, document)
                     total_documents += 1
                     total_chunks += resume["chunks"]
+                    total_indicateurs += resume["indicateurs"]
                     if resume["statut"] == "ok":
                         nouveaux_documents += 1
                     print(
                         f"{document.type:5} | {resume['statut']:12} | "
-                        f"{resume['chunks']:3} chunks | {document.titre[:60]}"
+                        f"{resume['chunks']:3} chunks | {resume['indicateurs']:4} indicateurs | {document.titre[:60]}"
                     )
 
         # Flux transversal (voir data/listing_urls.py, URL_DERNIERES_PARUTIONS) : capture
@@ -151,7 +172,7 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
 
     print()
     print(f"Total : {total_documents} document(s) traite(s), {total_chunks} chunk(s) indexe(s), "
-          f"{nouveaux_documents} nouveaute(s).")
+          f"{total_indicateurs} indicateur(s) structure(s), {nouveaux_documents} nouveaute(s).")
     return nouveaux_documents
 
 

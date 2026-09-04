@@ -6,30 +6,154 @@ Deux sources possibles, voir ADR 0004 (docs/adr/0004-api-bds-pour-les-indicateur
 son complément (docs/complement_conception_bds.pdf) :
 - `structurer_depuis_bds` : source primaire pour Économie / Marché du travail / Population,
   à partir d'un indicateur récupéré via `src/bds_client.py`.
-- `structurer` : repli PDF/XLSX pour le texte hors catalogue BDS. Non prioritaire depuis
-  que l'API BDS couvre la majorité des indicateurs des 3 catégories ciblées (voir
-  TODO.md).
+- `structurer` : repli PDF/XLSX pour les publications hors catalogue BDS. Reconnaît un
+  motif précis rencontré en conditions réelles (ex. "Principaux indicateurs
+  trimestriels rétropolés..., méthodologie EMO") plutôt que d'essayer d'interpréter un
+  tableau quelconque : un classeur XLSX qui contient à la fois (a) une feuille
+  dictionnaire à 3 colonnes "Code" / "Nom" / "Unité" et (b) une feuille de données au
+  format large où chaque colonne est un code du dictionnaire et chaque ligne une
+  période. Ce n'est pas une tentative de couvrir tout PDF/XLSX imaginable (portée
+  volontairement restreinte) : si ce motif n'est pas reconnu, `structurer` renvoie une
+  liste vide plutôt que d'inventer une interprétation, ce qui la rend sûre à appeler
+  systématiquement dans le pipeline d'indexation, quel que soit le document.
 """
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime, timezone
 
 from .models import Document, Indicateur
+
+Tableau = list[list[str]]
+
+
+def _normaliser(texte: str) -> str:
+    forme_decomposee = unicodedata.normalize("NFD", texte)
+    return "".join(c for c in forme_decomposee if unicodedata.category(c) != "Mn").strip().lower()
 
 
 class ConstructeurIndicateurs:
     """Transforme des données chiffrées brutes (API BDS ou tableaux PDF/XLSX) en
     `Indicateur` structurés, prêts à insérer dans la table `indicateur`."""
 
-    def structurer(self, id_document: int, tableaux: list[list[list[str]]]) -> list[Indicateur]:
-        """Repli PDF/XLSX : retourne la liste des Indicateur identifiés dans `tableaux`.
+    def structurer(self, id_document: int, tableaux: list[Tableau]) -> list[Indicateur]:
+        """Repli PDF/XLSX : voir docstring de module pour le motif reconnu (dictionnaire
+        Code/Nom/Unité + table de données au format large). Renvoie [] si ce motif
+        n'est pas identifié dans `tableaux` -- jamais d'exception, jamais d'invention.
 
-        Non implémenté : depuis l'ADR 0004, l'API BDS couvre la majorité des
-        indicateurs des 3 catégories ciblées (voir `structurer_depuis_bds`), ce qui rend
-        ce chemin moins prioritaire. Reste nécessaire pour les publications hors
-        catalogue BDS (voir ADR 0003).
+        Convention observée pour dériver la ventilation : le "Nom" du dictionnaire
+        porte la dimension en suffixe après une virgule quand la colonne est ventilée
+        (ex. "Taux de chômage strict, Urbain"), et rien quand c'est l'agrégat (ex.
+        "Taux de chômage strict" seul). On sépare donc `nom`/`region` sur la DERNIÈRE
+        virgule du "Nom" -- même convention `nom` stable / `region` variable
+        qu'utilise `structurer_depuis_bds`, ce qui permet à `LookupStructure` de
+        fonctionner sans distinction entre les deux sources.
         """
-        raise NotImplementedError("Repli PDF/XLSX hors périmètre V1, voir TODO.md")
+        dictionnaire, index_dictionnaire = self._extraire_dictionnaire(tableaux)
+        if dictionnaire is None:
+            return []
+
+        donnees = self._trouver_table_donnees(tableaux, index_dictionnaire, dictionnaire)
+        if donnees is None:
+            return []
+
+        entete = donnees[0]
+        index_annee = self._trouver_colonne_par_nom(entete, dictionnaire, {"annee"})
+        index_trimestre = self._trouver_colonne_par_nom(entete, dictionnaire, {"trimestre"})
+        if index_annee is None:
+            return []  # pas de colonne de periode identifiable : motif non reconnu
+
+        indicateurs: list[Indicateur] = []
+        for ligne in donnees[1:]:
+            if index_annee >= len(ligne):
+                continue
+            annee = ligne[index_annee].strip()
+            if not annee:
+                continue
+            trimestre = ""
+            if index_trimestre is not None and index_trimestre < len(ligne):
+                trimestre = ligne[index_trimestre].strip()
+            periode = f"{annee}T{trimestre}" if trimestre else annee
+
+            for index_colonne, code in enumerate(entete):
+                if index_colonne in (index_annee, index_trimestre) or index_colonne >= len(ligne):
+                    continue
+                info = dictionnaire.get(code.strip())
+                if info is None:
+                    continue
+                nom_complet, unite = info
+                brut = ligne[index_colonne].strip()
+                if not brut:
+                    continue
+                try:
+                    valeur = float(brut.replace(",", "."))
+                except ValueError:
+                    continue
+
+                if "," in nom_complet:
+                    nom, region = (p.strip() for p in nom_complet.rsplit(",", 1))
+                else:
+                    nom, region = nom_complet, None
+
+                indicateurs.append(Indicateur(
+                    id_indicateur=None, nom=nom, valeur=valeur, unite=unite,
+                    periode=periode, region=region, id_document=id_document, code_bds=None,
+                ))
+
+        return indicateurs
+
+    @staticmethod
+    def _extraire_dictionnaire(tableaux: list[Tableau]) -> tuple[dict[str, tuple[str, str]] | None, int | None]:
+        """Repère la feuille dictionnaire (en-tête "Code"/"Nom"/"Unité", tolérant sur
+        les accents/casse) et construit code -> (nom, unité)."""
+        for index, tableau in enumerate(tableaux):
+            if not tableau or len(tableau[0]) < 3:
+                continue
+            if [_normaliser(c) for c in tableau[0][:3]] != ["code", "nom", "unite"]:
+                continue
+            dictionnaire: dict[str, tuple[str, str]] = {}
+            for ligne in tableau[1:]:
+                if len(ligne) < 2:
+                    continue
+                code, nom = ligne[0].strip(), ligne[1].strip()
+                unite = ligne[2].strip() if len(ligne) > 2 else ""
+                if code and nom:
+                    dictionnaire[code] = (nom, unite or None)
+            if dictionnaire:
+                return dictionnaire, index
+        return None, None
+
+    @staticmethod
+    def _trouver_table_donnees(
+        tableaux: list[Tableau], index_dictionnaire: int, dictionnaire: dict[str, tuple[str, str]],
+    ) -> Tableau | None:
+        """Parmi les autres tableaux, choisit celui dont le plus de colonnes
+        correspondent à des codes connus du dictionnaire -- au moins la moitié de ses
+        colonnes, sinon on considère qu'aucune table de données fiable n'a été
+        trouvée plutôt que de mal interpréter un tableau sans rapport (ex. la feuille
+        "Avis aux utilisateurs", une simple note de bas de page)."""
+        meilleure: Tableau | None = None
+        meilleur_score = 0
+        for index, tableau in enumerate(tableaux):
+            if index == index_dictionnaire or len(tableau) < 2:
+                continue
+            score = sum(1 for code in tableau[0] if code.strip() in dictionnaire)
+            if score > meilleur_score:
+                meilleur_score = score
+                meilleure = tableau
+        if meilleure is not None and meilleur_score >= len(meilleure[0]) / 2:
+            return meilleure
+        return None
+
+    @staticmethod
+    def _trouver_colonne_par_nom(
+        entete: list[str], dictionnaire: dict[str, tuple[str, str]], noms_cibles_normalises: set[str],
+    ) -> int | None:
+        for index, code in enumerate(entete):
+            info = dictionnaire.get(code.strip())
+            if info and _normaliser(info[0]) in noms_cibles_normalises:
+                return index
+        return None
 
     def structurer_depuis_bds(self, indicateur_json: dict, id_document: int) -> list[Indicateur]:
         """Transforme la réponse de `bds_client.recuperer_indicateur(code)` en une liste
