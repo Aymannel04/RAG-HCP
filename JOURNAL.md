@@ -1666,3 +1666,50 @@ fichier .xlsx dans le corpus. Verification : `data/raw/248688.xlsx` existait dej
 lancee dessus : 3 tableaux proprement extraits (donnees chiffrees 2017+, dictionnaire
 des codes de colonnes, note methodologique sur les arrondis), aucune erreur. Note
 TODO.md corrigee.
+
+## 8 septembre 2026 -- retouches demandees par l'encadrante avant soutenance
+
+Mail de l'encadrante recu la veille de la presentation finale, avec en piece jointe un
+rapport de stage d'un autre stagiaire HCP (organigramme + description DSIS) a utiliser
+comme modele/source pour la section institutionnelle. 5 demandes traitees :
+
+1. **Organigramme et section institutionnelle du rapport** -- extraction du contenu
+   factuel (organigramme HCP, organisation DSIS en 2 divisions/6 services) depuis le
+   PDF de reference, reformule avec mes propres mots (jamais copie-colle, risque de
+   plagiat inter-rapports) et illustre par 2 nouveaux diagrammes generes avec le meme
+   pipeline SVG que les autres schemas du rapport (`docs/images_src/gen_organigramme.py`,
+   `gen_dsis.py`) plutot que de reutiliser l'image du rapport source. Inseres dans
+   `docs/rapport_stage.tex`, sections "Le Haut-Commissariat au Plan" et "La Direction
+   des Systemes d'Information Statistiques".
+2. **Nom du binome** -- `rapport_stage.tex` etait deja propre (verifie session
+   precedente). Restait dans les fiches de cadrage/conception : `fiche_cadrage_v4.tex`,
+   `conception_uml_v4.tex`, `complement_conception_bds.tex` -- "Binome : Ayman El Baida
+   et Saad Mesbah" remplace par "Etudiant : Ayman El Baida" dans les 3 fichiers.
+   `conception_uml_v3.tex` volontairement laisse tel quel (archive historique).
+3. **Filtre arabe/bilingue** -- bug reel dans `Scraper._detecter_langue` : un signal
+   contenant a la fois un indice arabe ET un indice francais (ex. "Version Ar / Version
+   Fr" dans un meme bloc) etait classe "ar" et donc exclu a tort, alors qu'il designe un
+   document bilingue avec du contenu francais exploitable. Corrige : "ar" uniquement si
+   indice arabe present ET aucun indice francais. L'exclusion de l'arabe pur (hors
+   scope V1, fiche de cadrage section 11) est inchangee. 3 nouveaux tests.
+4. **Dates au format ISO** -- `_extraire_date` (pages article, format "Redige le Mardi 9
+   Juin 2026...") et `_extraire_entrees_telechargements` (pages telechargement, format
+   JJ/MM/AAAA) stockaient la date brute telle quelle, deux formats differents non
+   comparables. Ajout de `_iso_depuis_date_fr` / `_iso_depuis_date_jjmmaaaa`,
+   conversion vers YYYY-MM-DD a l'extraction, repli sur la chaine brute si format non
+   reconnu. Tests existants mis a jour (dates ISO attendues) + 2 nouveaux tests.
+5. **URLs de scraping** -- Economie / Marche du travail / Population et demographie
+   passent du systeme de pages listing HTML par sous-theme (`Scraper.
+   collecter_depuis_listing`) au systeme hcp.ma/downloads/?tag=<categorie>
+   (`Scraper.collecter_depuis_telechargements`), avec les 3 URLs fournies par
+   l'encadrante -- le meme mecanisme deja utilise pour le flux "Dernieres parutions"
+   depuis le 30/08. `data/listing_urls.py` restructure (nouveau
+   `URLS_TELECHARGEMENTS_PAR_CATEGORIE`, anciennes listes gardees en reference/secours
+   non appelees), `scripts/indexer_documents.py` et `scripts/decouverte_publications.py`
+   mis a jour en consequence (ce dernier bascule sur `_decouvrir_entrees_
+   telechargements` pour l'apercu). Point de vigilance signale a Ayman : ce mecanisme
+   n'a pour l'instant ete stress-teste en conditions reelles que sur "Dernieres
+   parutions", pas encore sur ces 3 categories precises (pagination/fiabilite a
+   verifier sur le PC, notamment pour Demographie qui couvrait avant 10 sous-themes).
+
+Suite complete apres ces changements : 235/235 (230 + 5 nouveaux tests scraper).
