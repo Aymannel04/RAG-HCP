@@ -18,15 +18,20 @@ Usage prévu (à exécuter sur le PC, ce sandbox n'a pas d'accès réseau vers h
     python -m scripts.indexer_documents --limite 3        # test rapide, 3 documents
     python -m scripts.indexer_documents --db chemin.db    # base personnalisée
 
-Collecte via `data/listing_urls.py` (ADR 0006, `Scraper.collecter_depuis_listing`,
-`max_pages=1` — portée "fraîcheur" par défaut ; passer `max_pages=None` dans le code
-pour une collecte historique complète) puis indexe chaque `Document` brut retourné.
+Collecte via `data/listing_urls.py` (`URLS_TELECHARGEMENTS_PAR_CATEGORIE`,
+`Scraper.collecter_depuis_telechargements`, `max_pages=1` — portée "fraîcheur" par
+défaut ; passer `max_pages=None` dans le code pour une collecte historique complète)
+puis indexe chaque `Document` brut retourné. Depuis le 08/09 (demande de l'encadrante),
+les 3 catégories ciblées (Économie, Marché du travail, Population et démographie)
+utilisent ce même mécanisme par tag hcp.ma/downloads/?tag=<catégorie> plutôt que
+l'ancien système de pages listing HTML par sous-thème (voir historique dans
+`data/listing_urls.py`) — chaque entrée pointe déjà vers le fichier téléchargeable,
+sans page article HTML intermédiaire à visiter.
 
-Depuis le 30/08, une 2e source est aussi couverte : `URL_DERNIERES_PARUTIONS` (flux
-transversal hcp.ma/downloads/?tag=Dernières+parutions, `Scraper.collecter_depuis_
-telechargements`) — capture les publications qui ne sont rattachées à aucun sous-thème
-des 3 catégories ci-dessus (ex. "Chiffres clés"), voir commentaire dans
-`data/listing_urls.py`.
+Depuis le 30/08, une 2e source est aussi couverte par le même mécanisme :
+`URL_DERNIERES_PARUTIONS` (flux transversal hcp.ma/downloads/?tag=Dernières+parutions)
+— capture les publications qui ne sont rattachées à aucune des 3 catégories ci-dessus
+(ex. "Chiffres clés"), voir commentaire dans `data/listing_urls.py`.
 """
 from __future__ import annotations
 
@@ -111,7 +116,7 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
     (voir docstring de ce module -- inutile de le vider une nuit sans nouveaute)."""
     # Imports locaux : evite de charger Scraper/requests pour les tests qui n'utilisent
     # que `indexer_document` (celui-ci n'a besoin d'aucun acces reseau).
-    from data.listing_urls import URL_DERNIERES_PARUTIONS, URLS_LISTING_PAR_CATEGORIE
+    from data.listing_urls import URL_DERNIERES_PARUTIONS, URLS_TELECHARGEMENTS_PAR_CATEGORIE
     from src.scraper import Scraper
 
     conn = connecter(chemin_db)
@@ -125,26 +130,29 @@ def main(chemin_db: Optional[Path] = None, limite: Optional[int] = None) -> int:
     nouveaux_documents = 0
 
     try:
-        for categorie, listings in URLS_LISTING_PAR_CATEGORIE.items():
-            for url_listing in listings:
+        # Les 3 categories ciblees utilisent desormais le systeme de telechargements par
+        # tag (depuis le 08/09, demande encadrante) : chaque entree pointe deja vers le
+        # fichier telechargeable, pas de page article HTML intermediaire a visiter (voir
+        # docstring de module et data/listing_urls.py).
+        for categorie, url_tag in URLS_TELECHARGEMENTS_PAR_CATEGORIE.items():
+            if limite is not None and total_documents >= limite:
+                break
+            documents = scraper.collecter_depuis_telechargements(
+                url_tag, categorie=categorie, max_pages=1
+            )
+            for document in documents:
                 if limite is not None and total_documents >= limite:
                     break
-                documents = scraper.collecter_depuis_listing(
-                    url_listing, categorie=categorie, max_pages=1
+                resume = indexer_document(conn, extracteur, indexeur, document)
+                total_documents += 1
+                total_chunks += resume["chunks"]
+                total_indicateurs += resume["indicateurs"]
+                if resume["statut"] == "ok":
+                    nouveaux_documents += 1
+                print(
+                    f"{document.type:5} | {resume['statut']:12} | "
+                    f"{resume['chunks']:3} chunks | {resume['indicateurs']:4} indicateurs | {document.titre[:60]}"
                 )
-                for document in documents:
-                    if limite is not None and total_documents >= limite:
-                        break
-                    resume = indexer_document(conn, extracteur, indexeur, document)
-                    total_documents += 1
-                    total_chunks += resume["chunks"]
-                    total_indicateurs += resume["indicateurs"]
-                    if resume["statut"] == "ok":
-                        nouveaux_documents += 1
-                    print(
-                        f"{document.type:5} | {resume['statut']:12} | "
-                        f"{resume['chunks']:3} chunks | {resume['indicateurs']:4} indicateurs | {document.titre[:60]}"
-                    )
 
         # Flux transversal (voir data/listing_urls.py, URL_DERNIERES_PARUTIONS) : capture
         # les nouveautes hors des 3 categories ci-dessus (ex. "Chiffres cles", brochures
