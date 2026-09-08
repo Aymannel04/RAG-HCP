@@ -45,6 +45,16 @@ INDICES_HREF_TELECHARGEMENT = ("/attachment/", "/file/")
 INDICES_ARABE = ("_ar.", "_ar)", "(ar)", " ar)", "version ar", "arabe")
 INDICES_FRANCAIS = ("_fr.", "_fr)", "(fr)", " fr)", "version fr", "francais", "français")
 
+# Table de conversion des noms de mois francais utilises par hcp.ma (ex. "Redige le
+# Mardi 9 Juin 2026") vers leur numero, pour la conversion ISO 8601 des dates (voir
+# _iso_depuis_date_fr). Formes avec et sans accent couvertes (encodage variable selon
+# les pages, voir normalisation NFC dans _extraire_date).
+MOIS_FR = {
+    "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
+    "juin": 6, "juillet": 7, "août": 8, "aout": 8, "septembre": 9,
+    "octobre": 10, "novembre": 11, "décembre": 12, "decembre": 12,
+}
+
 # Motif d'URL des pages article sur hcp.ma (ex. ".../Situation-economique-nationale...
 # _a4325.html"), stable sur l'ensemble du site — sert a distinguer un lien d'article
 # d'un lien de menu/navigation sur une page listing (voir ADR 0006).
@@ -341,7 +351,12 @@ class Scraper:
 
             texte_bloc = bloc.get_text(" ", strip=True)
             m_date = re.search(r"Publi[ée] le\s*:\s*(\d{2}/\d{2}/\d{4})", texte_bloc)
-            date_publication = m_date.group(1) if m_date else None
+            date_publication = None
+            if m_date:
+                brute = m_date.group(1)
+                # Conversion ISO 8601 (demande encadrante, 08/09) ; repli sur la chaine
+                # brute JJ/MM/AAAA si jamais elle ne correspond pas au format attendu.
+                date_publication = Scraper._iso_depuis_date_jjmmaaaa(brute) or brute
 
             langue = Scraper._detecter_langue(titre.lower())
             resultats.append((titre, href, type_suppose, date_publication, langue))
@@ -412,15 +427,60 @@ class Scraper:
         # normalisation prealable en NFC.
         texte = unicodedata.normalize("NFC", soup.get_text(" ", strip=True))
         m = re.search(r"R[ée]dig[ée] le ([^\.]+?\d{4}(?:\s*[àa]\s*\d{1,2}[:h]\d{2})?)", texte)
-        return m.group(1).strip() if m else None
+        if not m:
+            return None
+        brute = m.group(1).strip()
+        # Convertit en ISO 8601 (YYYY-MM-DD) pour permettre un tri chronologique correct
+        # (demande encadrante, 08/09) ; si le format ne correspond pas a ce qui est
+        # attendu (cas non prevu), on degrade silencieusement vers la chaine brute
+        # plutot que de perdre la date.
+        return Scraper._iso_depuis_date_fr(brute) or brute
+
+    @staticmethod
+    def _iso_depuis_date_fr(texte_date: str) -> Optional[str]:
+        """Convertit une date au format naturel francais de hcp.ma (ex. "Mardi 9 Juin
+        2026 à 10:20", telle que capturee par _extraire_date) en ISO 8601 (YYYY-MM-DD).
+        Renvoie None si le texte ne contient pas un jour/mois-nomme/annee reconnaissable
+        (repli gere par l'appelant : la date brute est alors conservee)."""
+        m = re.search(r"(\d{1,2})\s+([A-Za-zÀ-ÿ]+)\s+(\d{4})", texte_date)
+        if not m:
+            return None
+        jour, mois_nom, annee = m.groups()
+        mois = MOIS_FR.get(mois_nom.lower())
+        if mois is None:
+            return None
+        return f"{annee}-{mois:02d}-{int(jour):02d}"
+
+    @staticmethod
+    def _iso_depuis_date_jjmmaaaa(texte_date: str) -> Optional[str]:
+        """Convertit une date au format JJ/MM/AAAA (utilise par les pages
+        hcp.ma/downloads/?tag=..., voir _extraire_entrees_telechargements) en ISO 8601
+        (YYYY-MM-DD)."""
+        m = re.match(r"(\d{2})/(\d{2})/(\d{4})", texte_date)
+        if not m:
+            return None
+        jour, mois, annee = m.groups()
+        return f"{annee}-{mois}-{jour}"
 
     @staticmethod
     def _detecter_langue(signal: str) -> str:
-        if any(indice in signal for indice in INDICES_ARABE):
+        """Detecte la langue d'un signal (href + texte + title + icones combines, voir
+        appelants). Corrige le 08/09 : un signal contenant a la fois un indice arabe ET
+        un indice francais (ex. "Version Ar / Version Fr" dans un meme bloc/tooltip, ou
+        titre mentionnant "AR / FR") designe un document BILINGUE, pas un document
+        arabe seul -- il ne doit donc pas etre exclu par le filtre hors-scope V1 (voir
+        `collecter`/`_filtrer_urls_arabe`/`collecter_depuis_telechargements`, qui
+        n'excluent que la langue "ar"). Avant ce correctif, la simple presence d'un
+        indice arabe suffisait a classer "ar" et donc a exclure a tort ces documents
+        bilingues, alors qu'ils contiennent du contenu francais exploitable.
+        Seul un signal avec un indice arabe et AUCUN indice francais est desormais
+        classe "ar" (arabe pur, toujours hors scope V1 -- voir fiche de cadrage
+        section 11, inchange par ce correctif)."""
+        a_indice_arabe = any(indice in signal for indice in INDICES_ARABE)
+        a_indice_francais = any(indice in signal for indice in INDICES_FRANCAIS)
+        if a_indice_arabe and not a_indice_francais:
             return "ar"
-        if any(indice in signal for indice in INDICES_FRANCAIS):
-            return "fr"
-        return "fr"  # a defaut d'indice explicite, on suppose francais (langue par defaut du site)
+        return "fr"  # francais explicite, bilingue (ar+fr), ou aucun indice -> defaut francais
 
     @classmethod
     def _detecter_pieces_jointes(cls, soup: BeautifulSoup) -> list[tuple[str, str, str]]:

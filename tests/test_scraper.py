@@ -24,8 +24,37 @@ def test_extraire_titre_repli_sur_meta_og_title():
 def test_extraire_date_pattern_redige_le():
     soup = BeautifulSoup("<p>Redige le Lundi 29 Juin 2026 a 08:00</p>", "lxml")
     date = Scraper._extraire_date(soup)
-    assert date is not None
-    assert "2026" in date
+    assert date == "2026-06-29"  # converti en ISO 8601 (demande encadrante, 08/09)
+
+
+def test_iso_depuis_date_jjmmaaaa():
+    assert Scraper._iso_depuis_date_jjmmaaaa("06/08/2026") == "2026-08-06"
+
+
+def test_iso_depuis_date_fr_texte_non_reconnu_renvoie_none():
+    # Repli attendu par les appelants (_extraire_date/_extraire_entrees_telechargements) :
+    # la chaine brute est alors conservee plutot que de perdre la date.
+    assert Scraper._iso_depuis_date_fr("date illisible") is None
+
+
+# --- Correctif du 08/09 : filtre arabe qui excluait aussi les documents bilingues ----
+#
+# Signale par l'encadrante : un document bilingue (mention "Version Ar / Version Fr"
+# dans un meme bloc/tooltip, ou "AR / FR" dans le titre) contient un indice arabe
+# (INDICES_ARABE) et se faisait donc exclure comme un document purement arabe, alors
+# qu'il contient du contenu francais exploitable. Seul un signal SANS indice francais
+# doit desormais etre classe "ar".
+
+def test_detecter_langue_bilingue_ar_fr_conserve_comme_francais():
+    assert Scraper._detecter_langue("note (version ar / version fr)") == "fr"
+
+
+def test_detecter_langue_arabe_seul_toujours_exclu():
+    assert Scraper._detecter_langue("rapport (version ar)") == "ar"
+
+
+def test_detecter_langue_francais_seul_inchange():
+    assert Scraper._detecter_langue("rapport_fr.pdf") == "fr"
 
 
 @patch("src.scraper.requests.get")
@@ -382,14 +411,16 @@ def test_extraire_entrees_telechargements_parse_titre_href_type_date():
     soup = BeautifulSoup(ENTREE_TELECHARGEMENT_TYPE, "lxml")
     resultats = Scraper._extraire_entrees_telechargements(soup)
 
+    # Dates converties en ISO 8601 (YYYY-MM-DD) depuis le format brut JJ/MM/AAAA de la
+    # page (demande encadrante, 08/09 -- voir _iso_depuis_date_jjmmaaaa).
     assert resultats == [
-        ("Chiffres clés, 2026 (version arabe et anglaise)", "/file/248696/", "pdf", "06/08/2026", "ar"),
+        ("Chiffres clés, 2026 (version arabe et anglaise)", "/file/248696/", "pdf", "2026-08-06", "ar"),
         (
             "Principaux indicateurs trimestriels rétropolés provisoires du marché du "
             "travail selon la méthodologie EMO, Période de 2017 à 2025",
             "/file/248688/",
             "xlsx",
-            "04/08/2026",
+            "2026-08-04",
             "fr",
         ),
     ]
@@ -406,7 +437,7 @@ def test_extraire_entrees_telechargements_detecte_langue_arabe_via_le_titre():
     resultats = Scraper._extraire_entrees_telechargements(soup)
 
     assert resultats == [
-        ("Point de conjoncture N° 50, Juillet 2026 (version Ar)", "/file/243619/", "pdf", "16/07/2026", "ar")
+        ("Point de conjoncture N° 50, Juillet 2026 (version Ar)", "/file/243619/", "pdf", "2026-07-16", "ar")
     ]
 
 
