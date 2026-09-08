@@ -17,6 +17,7 @@ Nécessite une clé API gratuite (https://console.mistral.ai/), à placer dans u
 from __future__ import annotations
 
 import os
+import time
 
 import requests
 from dotenv import load_dotenv
@@ -25,6 +26,15 @@ load_dotenv()
 
 URL_API = "https://api.mistral.ai/v1/chat/completions"
 MODELE = "mistral-small-latest"
+
+# Le tier gratuit limite mistral-small a 1 requete/seconde (voir
+# console.mistral.ai/limits). Un seul echange utilisateur declenche 2-3 appels
+# successifs (classification, reformulation, generation), assez rapproches pour
+# depasser cette limite -- d'ou le retry automatique dans _appeler_api plutot que
+# de degrader immediatement vers le message d'erreur (voir
+# Generateur._generer_reponse_notion).
+NB_TENTATIVES_429 = 3
+DELAI_RETRY_429 = 2.0  # secondes, utilise si l'API ne renvoie pas d'en-tete Retry-After
 
 PROMPT_SYSTEME = (
     "Tu es un assistant du Haut-Commissariat au Plan (HCP) qui répond à des questions "
@@ -36,11 +46,13 @@ PROMPT_SYSTEME = (
 )
 
 
-def generer(question: str, texte_contexte: str) -> str:
-    """Fonction de génération compatible avec Generateur (voir
-    src/generateur.py::TypeFonctionGeneration) : (question, texte_contexte) -> str.
+def _appeler_api(messages: list[dict], temperature: float, timeout: int) -> str:
+    """Poste un appel chat/completions a l'API Mistral et renvoie le texte de la
+    reponse. Partage par generer/reformuler_question/classifier_question -- seuls
+    les messages/temperature/timeout different entre ces trois usages.
 
-    À injecter tel quel : `Generateur(conn, fonction_generation=generer)`.
+    Retente automatiquement sur 429 (voir NB_TENTATIVES_429 ci-dessus) avant
+    d'abandonner ; toute autre erreur HTTP remonte normalement.
     """
     cle_api = os.environ.get("MISTRAL_API_KEY")
     if not cle_api:
@@ -51,21 +63,36 @@ def generer(question: str, texte_contexte: str) -> str:
             "MISTRAL_API_KEY=ta_cle_ici"
         )
 
-    reponse = requests.post(
-        URL_API,
-        headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
-        json={
-            "model": MODELE,
-            "messages": [
-                {"role": "system", "content": PROMPT_SYSTEME},
-                {"role": "user", "content": f"Contexte :\n{texte_contexte}\n\nQuestion : {question}"},
-            ],
-            "temperature": 0.2,  # factuel, pas creatif -- coherent avec le grounding strict
-        },
+    for tentative in range(NB_TENTATIVES_429):
+        reponse = requests.post(
+            URL_API,
+            headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
+            json={"model": MODELE, "messages": messages, "temperature": temperature},
+            timeout=timeout,
+        )
+        derniere_tentative = tentative == NB_TENTATIVES_429 - 1
+        if reponse.status_code == 429 and not derniere_tentative:
+            delai = float(reponse.headers.get("Retry-After", DELAI_RETRY_429))
+            time.sleep(delai)
+            continue
+        reponse.raise_for_status()
+        return reponse.json()["choices"][0]["message"]["content"].strip()
+
+
+def generer(question: str, texte_contexte: str) -> str:
+    """Fonction de génération compatible avec Generateur (voir
+    src/generateur.py::TypeFonctionGeneration) : (question, texte_contexte) -> str.
+
+    À injecter tel quel : `Generateur(conn, fonction_generation=generer)`.
+    """
+    return _appeler_api(
+        messages=[
+            {"role": "system", "content": PROMPT_SYSTEME},
+            {"role": "user", "content": f"Contexte :\n{texte_contexte}\n\nQuestion : {question}"},
+        ],
+        temperature=0.2,  # factuel, pas creatif -- coherent avec le grounding strict
         timeout=30,
     )
-    reponse.raise_for_status()
-    return reponse.json()["choices"][0]["message"]["content"].strip()
 
 
 PROMPT_SYSTEME_CLASSIFICATION = (
@@ -136,36 +163,20 @@ def reformuler_question(question: str, historique_texte: str) -> str:
 
     À injecter tel quel : `poser_question(..., fonction_reformulation=reformuler_question)`.
     """
-    cle_api = os.environ.get("MISTRAL_API_KEY")
-    if not cle_api:
-        raise RuntimeError(
-            "MISTRAL_API_KEY manquante. Cree un compte gratuit sur "
-            "https://console.mistral.ai/, genere une cle API (section API Keys), "
-            "et ajoute-la dans un fichier .env a la racine du projet : "
-            "MISTRAL_API_KEY=ta_cle_ici"
-        )
-
-    reponse = requests.post(
-        URL_API,
-        headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
-        json={
-            "model": MODELE,
-            "messages": [
-                {"role": "system", "content": PROMPT_SYSTEME_REFORMULATION},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Historique recent :\n{historique_texte}\n\n"
-                        f"Question de suivi : {question}"
-                    ),
-                },
-            ],
-            "temperature": 0.0,  # reformulation : aucune creativite souhaitee
-        },
+    return _appeler_api(
+        messages=[
+            {"role": "system", "content": PROMPT_SYSTEME_REFORMULATION},
+            {
+                "role": "user",
+                "content": (
+                    f"Historique recent :\n{historique_texte}\n\n"
+                    f"Question de suivi : {question}"
+                ),
+            },
+        ],
+        temperature=0.0,  # reformulation : aucune creativite souhaitee
         timeout=15,
     )
-    reponse.raise_for_status()
-    return reponse.json()["choices"][0]["message"]["content"].strip()
 
 
 def classifier_question(question: str) -> str:
@@ -178,27 +189,11 @@ def classifier_question(question: str) -> str:
 
     À injecter tel quel : `Routeur(fonction_classification_llm=classifier_question)`.
     """
-    cle_api = os.environ.get("MISTRAL_API_KEY")
-    if not cle_api:
-        raise RuntimeError(
-            "MISTRAL_API_KEY manquante. Cree un compte gratuit sur "
-            "https://console.mistral.ai/, genere une cle API (section API Keys), "
-            "et ajoute-la dans un fichier .env a la racine du projet : "
-            "MISTRAL_API_KEY=ta_cle_ici"
-        )
-
-    reponse = requests.post(
-        URL_API,
-        headers={"Authorization": f"Bearer {cle_api}", "Content-Type": "application/json"},
-        json={
-            "model": MODELE,
-            "messages": [
-                {"role": "system", "content": PROMPT_SYSTEME_CLASSIFICATION},
-                {"role": "user", "content": question},
-            ],
-            "temperature": 0.0,  # classification : aucune creativite souhaitee
-        },
+    return _appeler_api(
+        messages=[
+            {"role": "system", "content": PROMPT_SYSTEME_CLASSIFICATION},
+            {"role": "user", "content": question},
+        ],
+        temperature=0.0,  # classification : aucune creativite souhaitee
         timeout=15,  # plus court que generer() : reponse attendue en un seul mot
     )
-    reponse.raise_for_status()
-    return reponse.json()["choices"][0]["message"]["content"].strip()
