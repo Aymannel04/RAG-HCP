@@ -1,5 +1,3 @@
-import sys
-sys.path.insert(0, "/tmp/diagrams")
 from svg_helpers import SVG, GREY, WHITE, render
 
 NAVYT = "#1A2B4C"
@@ -29,7 +27,7 @@ LX, RX = 560, 1540
 # Sources (deux, independantes)
 y0 = 105
 h_srcL = box(s, LX, y0, 900, 90, "Sources texte : hcp.ma (scraping)",
-             "Articles HTML | Publications PDF/DOCX | 3 categories + \"Dernieres parutions\" (transversal, 30/08)",
+             "Publications PDF/DOCX | 3 categories + \"Dernieres parutions\" (transversal, 30/08)",
              BLUEF, BLUEB, NAVYT)
 h_srcR = box(s, RX, y0, 900, 90, "Source chiffree : API BDS (bds.hcp.ma)",
              "832 indicateurs catalogues, non documentee officiellement mais librement accessible (ADR 0004)",
@@ -103,6 +101,6 @@ s.note(W/2, H-45, [
     "Traits pleins = flux principal (donnees). Traits bleus pointilles = memoire conversationnelle (degradation silencieuse si Redis absent).",
 ], size=13.5)
 
-s.save("/tmp/diagrams/architecture.svg")
-render("/tmp/diagrams/architecture.svg", "/tmp/diagrams/architecture.png", scale=2.0)
+s.save("../images/architecture.svg")
+render("../images/architecture.svg", "../images/architecture.png", scale=2.0)
 print("done", yf+70)

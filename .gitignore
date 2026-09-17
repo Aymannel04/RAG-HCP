@@ -15,6 +15,8 @@ venv/
 *.log
 *.out
 *.toc
+*.lof
+*.lot
 *.synctex.gz
 
 # Données locales (pas versionnées : trop volumineuses / regénérables)
@@ -28,6 +30,7 @@ data/bds_catalogue.json
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Logs de la tache planifiee nocturne (scripts/rafraichir_corpus.ps1)
 logs/
@@ -58,5 +61,8 @@ docs/fiche_ventilation_routage_28_juillet.tex
 docs/fiche_ventilation_routage_28_juillet.pdf
 docs/rapport_stage.tex
 docs/rapport_stage.pdf
+docs/rapport_stage_conforme.tex
+docs/rapport_stage_conforme.pdf
 docs/fiche_sprint4_interface_memoire.tex
 docs/fiche_sprint4_interface_memoire.pdf
+docs/guide stage 1aci_2aci_2024.docx

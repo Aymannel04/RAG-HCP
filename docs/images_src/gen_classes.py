@@ -1,5 +1,3 @@
-import sys
-sys.path.insert(0, "/tmp/diagrams")
 from svg_helpers import SVG, NAVY, BLUE, GREY, WHITE, render
 
 W, H = 2260, 1700
@@ -28,9 +26,9 @@ h_bds, bx0, bx1 = uml_class(s, 1980, 350, 300, "BdsClient", ["+ recupererCatalog
 h_ci, cx0, cx1 = uml_class(s, 1620, 560, 400, "ConstructeurIndicateurs", ["+ structurerDepuisBds(json)", "+ structurer(tableaux)"])
 
 s.line(CX, 250 + h_extr, 620, 430, sw=1.8)
-s.path(f"M {CX} {250+h_extr} L 1620 560", sw=1.6, dash="7,5", stroke=GREY)
-s.text(1330, 505, "non implemente", size=12, color=GREY, style="italic")
-s.text(1330, 521, "(NotImplementedError)", size=12, color=GREY, style="italic")
+s.line(CX, 250 + h_extr, 1620, 560, sw=1.8)
+s.text(1330, 505, "repli PDF/XLSX", size=12, color=GREY, style="italic")
+s.text(1330, 521, "(implemente Sprint 5)", size=12, color=GREY, style="italic")
 s.line(1980, 350 + h_bds, 1620, 560, sw=1.8)
 
 # --- Memoire conversationnelle (nouveau, 28/07-23/08) -----------------------
@@ -82,9 +80,8 @@ s.line(CX, 1160 + h_gen, CX, 1370, sw=1.8)
 s.note(CX, 1620, [
     "Traits pleins : flux de donnees / appels de la chaine principale (inchangee depuis v3).",
     "Traits bleus pointilles : memoire conversationnelle Redis (ajoutee le 28/07, degradation silencieuse si Redis absent).",
-    "Trait gris pointille : chemin concu (complement_conception_bds.pdf) mais jamais code -- voir TODO.md.",
 ], size=13.5)
 
-s.save("/tmp/diagrams/uml_classes.svg")
-render("/tmp/diagrams/uml_classes.svg", "/tmp/diagrams/uml_classes.png", scale=2.0)
+s.save("../images/uml_classes.svg")
+render("../images/uml_classes.svg", "../images/uml_classes.png", scale=2.0)
 print("done")

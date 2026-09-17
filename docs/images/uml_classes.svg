@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2260" height="1700" viewBox="0 0 2260 1700">
+<rect x="0" y="0" width="2260" height="1700" fill="#FFFFFF"/>
+<text x="1130.0" y="42" font-family="Helvetica, Arial, sans-serif" font-size="28" font-weight="bold" fill="#111111" text-anchor="middle">Diagramme de classes (composants logiciels) -- v4</text>
+<rect x="980.0" y="78" width="340" height="78" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="980.0" y1="120" x2="1320.0" y2="120" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="107" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Scraper</text>
+<text x="994.0" y="139" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ collecter(urls)</text>
+<rect x="980.0" y="250" width="340" height="78" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="980.0" y1="292" x2="1320.0" y2="292" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="279" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Extracteur</text>
+<text x="994.0" y="311" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ extraire(document)</text>
+<line x1="1150" y1="156" x2="1150" y2="250" stroke="#111111" stroke-width="1.8"/>
+<rect x="420.0" y="430" width="400" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="420.0" y1="472" x2="820.0" y2="472" stroke="#111111" stroke-width="1.8"/>
+<text x="620" y="459" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">IndexeurTexte</text>
+<text x="434.0" y="491" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ indexer(texte)</text>
+<text x="434.0" y="517" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ rechercher(question)</text>
+<rect x="1830.0" y="350" width="300" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="1830.0" y1="392" x2="2130.0" y2="392" stroke="#111111" stroke-width="1.8"/>
+<text x="1980" y="379" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">BdsClient</text>
+<text x="1844.0" y="411" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ recupererCatalogue()</text>
+<text x="1844.0" y="437" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ recupererIndicateur(code)</text>
+<rect x="1420.0" y="560" width="400" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="1420.0" y1="602" x2="1820.0" y2="602" stroke="#111111" stroke-width="1.8"/>
+<text x="1620" y="589" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">ConstructeurIndicateurs</text>
+<text x="1434.0" y="621" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ structurerDepuisBds(json)</text>
+<text x="1434.0" y="647" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ structurer(tableaux)</text>
+<line x1="1150" y1="328" x2="620" y2="430" stroke="#111111" stroke-width="1.8"/>
+<line x1="1150" y1="328" x2="1620" y2="560" stroke="#111111" stroke-width="1.8"/>
+<text x="1330" y="505" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">repli PDF/XLSX</text>
+<text x="1330" y="521" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">(implemente Sprint 5)</text>
+<line x1="1980" y1="454" x2="1620" y2="560" stroke="#111111" stroke-width="1.8"/>
+<rect x="110.0" y="660" width="380" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="110.0" y1="702" x2="490.0" y2="702" stroke="#111111" stroke-width="1.8"/>
+<text x="300" y="689" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Reformulateur</text>
+<text x="124.0" y="721" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ reformulerSiNecessaire(</text>
+<text x="124.0" y="747" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">   question, historique)</text>
+<rect x="110.0" y="850" width="380" height="208" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="110.0" y1="892" x2="490.0" y2="892" stroke="#111111" stroke-width="1.8"/>
+<text x="300" y="879" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">CacheRedis</text>
+<text x="124.0" y="911" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">CacheReponses</text>
+<text x="124.0" y="937" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ obtenir(question)</text>
+<text x="124.0" y="963" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ enregistrer(question, rep.)</text>
+<text x="124.0" y="989" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">HistoriqueConversation</text>
+<text x="124.0" y="1015" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ ajouter(session, q, rep.)</text>
+<text x="124.0" y="1041" font-family="Consolas, monospace" font-size="12.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ recuperer(session)</text>
+<rect x="950.0" y="660" width="400" height="130" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="950.0" y1="702" x2="1350.0" y2="702" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="689" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Routeur</text>
+<text x="964.0" y="721" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ classifier(question)</text>
+<text x="964.0" y="747" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">  -&gt; CHIFFRE / NOTION /</text>
+<text x="964.0" y="773" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">     MIXTE / SALUTATION</text>
+<line x1="620" y1="534" x2="1150" y2="660" stroke="#111111" stroke-width="1.8"/>
+<line x1="1620" y1="664" x2="1150" y2="660" stroke="#111111" stroke-width="1.8"/>
+<line x1="490.0" y1="712.0" x2="950.0" y2="700" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="824" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">(CHIFFRE -&gt; LookupStructure ; NOTION -&gt; RetrievalReranker ;</text>
+<text x="1150" y="840" font-family="Helvetica, Arial, sans-serif" font-size="12.5" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">MIXTE -&gt; les deux, en parallele)</text>
+<path d="M 110.0 862 L 70.0 862 L 70.0 712.0 L 110.0 712.0" stroke="#1565C0" stroke-width="1.6" fill="none" stroke-dasharray="5,4"/>
+<text x="62.0" y="760" font-family="Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" font-style="italic" fill="#1565C0" text-anchor="end">historique</text>
+<text x="62.0" y="774" font-family="Helvetica, Arial, sans-serif" font-size="11.5" font-weight="normal" font-style="italic" fill="#1565C0" text-anchor="end">(lecture)</text>
+<rect x="420.0" y="900" width="400" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="420.0" y1="942" x2="820.0" y2="942" stroke="#111111" stroke-width="1.8"/>
+<text x="620" y="929" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">RetrievalReranker</text>
+<text x="434.0" y="961" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ rechercherEtTrier</text>
+<text x="434.0" y="987" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">  (question)</text>
+<rect x="1420.0" y="900" width="400" height="104" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="1420.0" y1="942" x2="1820.0" y2="942" stroke="#111111" stroke-width="1.8"/>
+<text x="1620" y="929" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">LookupStructure</text>
+<text x="1434.0" y="961" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ rechercherIndicateur</text>
+<text x="1434.0" y="987" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">  (question)</text>
+<line x1="1150" y1="790" x2="620" y2="900" stroke="#111111" stroke-width="1.8"/>
+<line x1="1150" y1="790" x2="1620" y2="900" stroke="#111111" stroke-width="1.8"/>
+<rect x="920.0" y="1160" width="460" height="130" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="920.0" y1="1202" x2="1380.0" y2="1202" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="1189" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Generateur</text>
+<text x="934.0" y="1221" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ genererReponse(contexte)</text>
+<text x="934.0" y="1247" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">  contexte : Indicateur |</text>
+<text x="934.0" y="1273" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">  list[Chunk] | ContexteMixte</text>
+<line x1="620" y1="1004" x2="1150" y2="1160" stroke="#111111" stroke-width="1.8"/>
+<line x1="1620" y1="1004" x2="1150" y2="1160" stroke="#111111" stroke-width="1.8"/>
+<path d="M 150.0 1058 L 150.0 1480 L 980.0 1480 L 980.0 1290" stroke="#1565C0" stroke-width="1.6" fill="none" stroke-dasharray="5,4"/>
+<text x="100.0" y="1440" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" font-style="italic" fill="#1565C0" text-anchor="start">cache reponses (NOTION uniquement)</text>
+<text x="100.0" y="1456" font-family="Helvetica, Arial, sans-serif" font-size="12" font-weight="normal" font-style="italic" fill="#1565C0" text-anchor="start">+ historique (ecriture, tous types)</text>
+<rect x="980.0" y="1370" width="340" height="78" rx="0" fill="#FFFFFF" stroke="#111111" stroke-width="1.8"/>
+<line x1="980.0" y1="1412" x2="1320.0" y2="1412" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="1399" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="bold" font-style="normal" fill="#111111" text-anchor="middle">Interface</text>
+<text x="994.0" y="1431" font-family="Consolas, monospace" font-size="13.5" font-weight="normal" font-style="normal" fill="#111111" text-anchor="start">+ afficher(reponse)</text>
+<line x1="1150" y1="1290" x2="1150" y2="1370" stroke="#111111" stroke-width="1.8"/>
+<text x="1150" y="1620.0" font-family="Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">Traits pleins : flux de donnees / appels de la chaine principale (inchangee depuis v3).</text>
+<text x="1150" y="1639.5" font-family="Helvetica, Arial, sans-serif" font-size="13.5" font-weight="normal" font-style="italic" fill="#555555" text-anchor="middle">Traits bleus pointilles : memoire conversationnelle Redis (ajoutee le 28/07, degradation silencieuse si Redis absent).</text>
+</svg>
