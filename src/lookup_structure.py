@@ -376,9 +376,20 @@ class LookupStructure:
 
         requis: set[str] = set()
         for terme_normalise, canonique in SYNONYMES_DIMENSIONS.items():
+            if not re.search(rf"\b{re.escape(terme_normalise)}\b", signal):
+                continue
             label_reel = labels_par_forme_normalisee.get(_normaliser_accents(canonique.lower()))
-            if label_reel and re.search(rf"\b{re.escape(terme_normalise)}\b", signal):
+            if label_reel:
                 requis.add(label_reel)
+            else:
+                # La question demande explicitement une dimension (ex. "femmes") que cet
+                # indicateur ne publie tout simplement pas (ex. I1588, ventile par milieu
+                # seulement, jamais par sexe) -- silencieusement l'ignorer renverrait
+                # l'agregat national comme s'il repondait a la question posee (bug reel
+                # observe le 23/09 : "population des femmes" renvoyait la population
+                # totale). Meme philosophie que le reste du module : refuser plutot que
+                # deviner/ignorer une partie de la demande.
+                return _AUCUNE_VENTILATION_FIABLE
         # Repli littéral : couvre les régions administratives et tout autre libellé BDS
         # sans synonyme connu (ex. "PIB hors agriculture"), appliqué label par label
         # plutôt qu'à la chaîne region entière (qui ne matche jamais une fois plusieurs

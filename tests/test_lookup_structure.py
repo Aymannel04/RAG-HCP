@@ -364,6 +364,25 @@ def test_ventilation_sexe_avec_label_bds_sans_accent(conn):
     assert resultat.valeur == pytest.approx(14.6)
 
 
+def test_ventilation_dimension_demandee_absente_de_lindicateur_refuse(conn):
+    # Regression reelle (23/09) : "population des femmes au maroc" matchait
+    # "Population du Maroc..." (ventile par milieu Urbain/Rural/Total UNIQUEMENT,
+    # jamais par sexe) et renvoyait silencieusement la ligne agregee nationale comme si
+    # elle repondait a la demande "femmes" -- un chiffre confiant mais faux vis-a-vis de
+    # la question posee. Doit desormais refuser (None) plutot qu'ignorer la dimension
+    # non satisfaisable, laissant le Routeur basculer sur RetrievalReranker.
+    id_doc = _document_synthetique(conn)
+    for valeur, region in [(36500.0, "Urbain"), (16000.0, "Rural"), (52500.0, "Total")]:
+        inserer_indicateur(conn, Indicateur(
+            id_indicateur=None, nom="Population du Maroc par annee civile", valeur=valeur,
+            unite="milliers", periode="2025", region=region, id_document=id_doc, code_bds="I1588",
+        ))
+    resultat = LookupStructure(conn).rechercher_indicateur(
+        "Quelle est la population des femmes au Maroc ?"
+    )
+    assert resultat is None
+
+
 def test_ventilation_branche_activite_est_resolue(conn):
     _peupler_indicateurs_ventiles(conn)
     resultat = LookupStructure(conn).rechercher_indicateur(
