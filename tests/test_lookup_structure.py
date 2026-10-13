@@ -192,7 +192,12 @@ def test_rechercher_indicateur_sans_accents_matche_quand_meme(conn):
     # base -- faisait basculer a tort sur RetrievalReranker au lieu de la reponse
     # structuree exacte.
     _peupler_indicateurs_realistes(conn)
-    resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de chomage pour les femmes")
+    # Question sans dimension : l'intention de ce test est le matching sans accent du
+    # NOM. Une version precedente ajoutait "pour les femmes", mais la fixture n'a aucune
+    # ligne ventilee par sexe pour cet indicateur -- le test attendait donc l'agregat
+    # renvoye en ignorant "femmes", exactement le defaut corrige le 13/10 (voir
+    # test_indicateur_sans_aucune_ventilation_refuse_une_dimension_demandee).
+    resultat = LookupStructure(conn).rechercher_indicateur("Quel est le taux de chomage")
     assert resultat is not None
     assert resultat.nom == "Taux de chômage selon le Milieu, le sexe et le groupe d'âges"
 
@@ -362,6 +367,40 @@ def test_ventilation_sexe_avec_label_bds_sans_accent(conn):
     assert resultat is not None
     assert resultat.region == "Feminin"
     assert resultat.valeur == pytest.approx(14.6)
+
+
+def test_indicateur_sans_aucune_ventilation_refuse_une_dimension_demandee(conn):
+    # Meme defaut que ci-dessous, branche differente : l'indicateur n'a AUCUNE ligne
+    # ventilee (seulement l'agregat national, region NULL), donc _resoudre_ventilation
+    # n'est jamais appelee et "des femmes" etait ignore en silence. Trouve par
+    # scripts/audit_ventilations.py (13/10) : "Importations des femmes" renvoyait
+    # l'agregat national.
+    id_doc = _document_synthetique(conn)
+    inserer_indicateur(conn, Indicateur(
+        id_indicateur=None, nom="Importations aux prix courants", valeur=284366.0,
+        unite="MDH", periode="2024", region=None, id_document=id_doc, code_bds="I1434",
+    ))
+    lookup = LookupStructure(conn)
+    assert lookup.rechercher_indicateur("Importations aux prix courants des femmes") is None
+    assert lookup.rechercher_indicateur("Importations aux prix courants en milieu rural") is None
+
+
+def test_indicateur_sans_ventilation_repond_toujours_sans_dimension_demandee(conn):
+    # Garde-fou contre un refus excessif : sans terme de dimension dans la question,
+    # l'agregat est toujours renvoye. Et un terme present dans le NOM meme de
+    # l'indicateur ("Population urbaine") n'est pas une exigence de ventilation.
+    id_doc = _document_synthetique(conn)
+    inserer_indicateur(conn, Indicateur(
+        id_indicateur=None, nom="Importations aux prix courants", valeur=284366.0,
+        unite="MDH", periode="2024", region=None, id_document=id_doc, code_bds="I1434",
+    ))
+    inserer_indicateur(conn, Indicateur(
+        id_indicateur=None, nom="Population urbaine du Maroc", valeur=25167.0,
+        unite="milliers", periode="2024", region=None, id_document=id_doc, code_bds="I9999",
+    ))
+    lookup = LookupStructure(conn)
+    assert lookup.rechercher_indicateur("Importations aux prix courants").valeur == 284366.0
+    assert lookup.rechercher_indicateur("population urbaine du Maroc").valeur == 25167.0
 
 
 def test_ventilation_dimension_demandee_absente_de_lindicateur_refuse(conn):

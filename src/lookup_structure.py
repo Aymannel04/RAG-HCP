@@ -238,6 +238,14 @@ class LookupStructure:
         else:
             # Aucune ligne ventilée pour cet indicateur : seule la ligne agrégée
             # (region IS NULL) existe.
+            if self._dimension_explicite_demandee(question, nom):
+                # Meme defaut que celui corrige dans _resoudre_ventilation (23/09), mais
+                # dans la branche qui n'y passe jamais : "importations des femmes" ou
+                # "PIB en milieu rural" ignoraient la dimension et renvoyaient l'agregat
+                # national comme reponse. Trouve par scripts/audit_ventilations.py
+                # (13/10, 18 cas sur 96 questions generees). Refus => repli du Routeur
+                # sur RetrievalReranker, comme partout ailleurs dans ce module.
+                return None
             region = None
 
         annee = self._extraire_annee(question)
@@ -330,6 +338,20 @@ class LookupStructure:
                 return None  # ambigu : égalité via des mots différents -> sujets réellement distincts
 
         return meilleurs_noms[0]
+
+    @staticmethod
+    def _dimension_explicite_demandee(question: str, nom_indicateur: str) -> bool:
+        """Vrai si la question cite un terme de SYNONYMES_DIMENSIONS (sexe, milieu...)
+        qui n'apparait pas deja dans le NOM de l'indicateur retenu -- un tel terme
+        porte alors une exigence de ventilation, pas une simple partie du libelle
+        (ex. "Population urbaine" contient legitimement "urbain" dans son propre nom)."""
+        signal = _normaliser_accents(question.lower())
+        nom_normalise = _normaliser_accents(nom_indicateur.lower())
+        for terme_normalise in SYNONYMES_DIMENSIONS:
+            motif = rf"\b{re.escape(terme_normalise)}\b"
+            if re.search(motif, signal) and not re.search(motif, nom_normalise):
+                return True
+        return False
 
     @staticmethod
     def _tokeniser(texte: str) -> set[str]:
